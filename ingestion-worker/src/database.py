@@ -172,6 +172,67 @@ class DatabaseManager:
             logger.error(f"Failed to get company count: {e}")
             return 0
 
+    def get_all_tickers(self) -> List[str]:
+        """
+        Get all ticker symbols from companies table.
+
+        Returns:
+            List of ticker symbols
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT ticker FROM companies ORDER BY ticker")
+                    results = cur.fetchall()
+                    return [row[0] for row in results]
+        except Exception as e:
+            logger.error(f"Failed to get tickers: {e}")
+            return []
+
+    def get_top_tickers(self, limit: int = 100) -> List[str]:
+        """
+        Get top tickers by market cap (top companies first).
+
+        For MVP, we approximate by alphabetical order.
+        In production, this should be based on actual market cap data.
+
+        Args:
+            limit: Number of top tickers to return
+
+        Returns:
+            List of top ticker symbols
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    # For now, return first 100 alphabetically
+                    # In production, add market_cap column and ORDER BY market_cap DESC
+                    cur.execute(f"SELECT ticker FROM companies ORDER BY ticker LIMIT {limit}")
+                    results = cur.fetchall()
+                    return [row[0] for row in results]
+        except Exception as e:
+            logger.error(f"Failed to get top tickers: {e}")
+            return []
+
+    def url_exists(self, url: str) -> bool:
+        """
+        Check if URL already exists in database.
+
+        Args:
+            url: Article URL to check
+
+        Returns:
+            True if URL exists, False otherwise
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1 FROM articles_raw WHERE url = %s LIMIT 1", (url,))
+                    return cur.fetchone() is not None
+        except Exception as e:
+            logger.error(f"Failed to check URL existence: {e}")
+            return False
+
     def close(self):
         """Close all database connections."""
         if self.connection_pool:

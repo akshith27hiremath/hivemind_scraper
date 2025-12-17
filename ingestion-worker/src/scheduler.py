@@ -11,7 +11,7 @@ from datetime import datetime
 from src.config import Config
 from src.logger import setup_logger
 from src.database import DatabaseManager
-from src.parsers import RSSParser
+from src.parsers import RSSParser, SeekingAlphaTickerParser
 from src.api_clients import NewsAPIClient, PolygonClient, SECParser
 
 logger = setup_logger(__name__)
@@ -24,6 +24,7 @@ class IngestionScheduler:
         """Initialize scheduler with database and parsers."""
         self.db_manager = DatabaseManager()
         self.rss_parser = RSSParser(self.db_manager)
+        self.seekingalpha_parser = SeekingAlphaTickerParser()
 
         # Initialize API clients (Week 2 - currently stubs)
         self.newsapi_client = NewsAPIClient(Config.NEWSAPI_KEY) if Config.NEWSAPI_KEY else None
@@ -51,6 +52,34 @@ class IngestionScheduler:
 
         except Exception as e:
             logger.error(f"RSS feed fetch task failed: {e}", exc_info=True)
+
+    def fetch_seekingalpha_tickers(self):
+        """Task: Fetch Seeking Alpha ticker-specific feeds."""
+        logger.info("=== Starting Seeking Alpha ticker feeds fetch task ===")
+        start_time = datetime.now()
+
+        try:
+            # Get all tickers from database
+            all_tickers = self.db_manager.get_all_tickers()
+            logger.info(f"Fetching news for {len(all_tickers)} tickers")
+
+            # Fetch ticker feeds with rate limiting
+            new_articles, duplicates, errors = self.seekingalpha_parser.fetch_all_tickers(
+                all_tickers, self.db_manager
+            )
+
+            # Get current totals
+            total_articles = self.db_manager.get_article_count()
+
+            duration = (datetime.now() - start_time).total_seconds()
+            logger.info(
+                f"=== Seeking Alpha ticker feeds complete: {new_articles} new, "
+                f"{duplicates} duplicates, {errors} errors, "
+                f"{total_articles} total articles, {duration:.2f}s ==="
+            )
+
+        except Exception as e:
+            logger.error(f"Seeking Alpha ticker fetch task failed: {e}", exc_info=True)
 
     def fetch_api_sources(self):
         """Task: Fetch from API sources (Week 2 implementation)."""
@@ -92,10 +121,14 @@ class IngestionScheduler:
         # RSS feeds every N minutes
         schedule.every(self.fetch_interval).minutes.do(self.fetch_rss_feeds)
 
+        # Seeking Alpha ticker feeds every 4 hours (conservative approach)
+        schedule.every(4).hours.do(self.fetch_seekingalpha_tickers)
+
         # API sources every N minutes (Week 2)
         # schedule.every(self.fetch_interval).minutes.do(self.fetch_api_sources)
 
-        logger.info(f"Scheduler configured: RSS feeds every {self.fetch_interval} minutes")
+        logger.info(f"Scheduler configured: RSS feeds every {self.fetch_interval} minutes, "
+                   f"Seeking Alpha ticker feeds every 4 hours")
 
     def run(self):
         """Main scheduler loop."""
