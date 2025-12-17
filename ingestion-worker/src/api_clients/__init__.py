@@ -1,7 +1,6 @@
 """API clients package."""
 
-from .newsapi_client import NewsAPIClient
-from .polygon_client import PolygonClient
-from .sec_parser import SECParser
+from .finnhub_client import FinnhubClient
+from .alpha_vantage_client import AlphaVantageClient
 
-__all__ = ['NewsAPIClient', 'PolygonClient', 'SECParser']
+__all__ = ['FinnhubClient', 'AlphaVantageClient']

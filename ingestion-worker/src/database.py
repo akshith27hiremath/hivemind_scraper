@@ -233,6 +233,83 @@ class DatabaseManager:
             logger.error(f"Failed to check URL existence: {e}")
             return False
 
+    def update_company_cik(self, ticker: str, cik: str) -> bool:
+        """
+        Update CIK value for a company.
+
+        Args:
+            ticker: Stock ticker symbol
+            cik: CIK number (10-digit zero-padded string)
+
+        Returns:
+            True if updated successfully, False otherwise
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE companies SET cik = %s WHERE ticker = %s",
+                        (cik, ticker)
+                    )
+                    rows_updated = cur.rowcount
+                    if rows_updated > 0:
+                        logger.debug(f"Updated CIK for {ticker}: {cik}")
+                        return True
+                    else:
+                        logger.warning(f"No company found with ticker: {ticker}")
+                        return False
+        except Exception as e:
+            logger.error(f"Failed to update CIK for {ticker}: {e}")
+            return False
+
+    def get_companies_with_cik(self, limit: Optional[int] = None) -> List[Dict]:
+        """
+        Get companies that have CIK values.
+
+        Args:
+            limit: Optional limit on number of companies
+
+        Returns:
+            List of dictionaries with ticker and cik
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    query = "SELECT ticker, cik FROM companies WHERE cik IS NOT NULL ORDER BY ticker"
+                    if limit:
+                        query += f" LIMIT {limit}"
+
+                    cur.execute(query)
+                    results = cur.fetchall()
+                    return [dict(row) for row in results]
+        except Exception as e:
+            logger.error(f"Failed to get companies with CIK: {e}")
+            return []
+
+    def get_tickers_with_cik(self, limit: Optional[int] = None) -> List[tuple]:
+        """
+        Get tickers with their CIK values.
+
+        Args:
+            limit: Optional limit on number of tickers
+
+        Returns:
+            List of tuples (ticker, cik)
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    query = "SELECT ticker, cik FROM companies WHERE cik IS NOT NULL ORDER BY ticker"
+                    if limit:
+                        query += f" LIMIT {limit}"
+
+                    cur.execute(query)
+                    results = cur.fetchall()
+                    return results
+        except Exception as e:
+            logger.error(f"Failed to get tickers with CIK: {e}")
+            return []
+
     def close(self):
         """Close all database connections."""
         if self.connection_pool:

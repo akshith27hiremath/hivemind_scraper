@@ -26,15 +26,16 @@ class Config:
     FETCH_INTERVAL_MINUTES = int(os.getenv('FETCH_INTERVAL_MINUTES', '15'))
 
     # API Keys (Week 2)
+    FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY', '')
+    ALPHAVANTAGE_API_KEY = os.getenv('ALPHAVANTAGE_API_KEY', '')
     NEWSAPI_KEY = os.getenv('NEWSAPI_KEY', '')
     POLYGON_API_KEY = os.getenv('POLYGON_API_KEY', '')
-    ALPHAVANTAGE_API_KEY = os.getenv('ALPHAVANTAGE_API_KEY', '')
 
     # RSS Feed URLs
     RSS_FEEDS = [
         {
             'name': 'Reuters Business',
-            'url': 'https://www.reuters.com/rssfeed/businessnews'
+            'url': 'https://news.google.com/rss/search?q=when:24h+allinurl:reuters.com+business&ceid=US:en&hl=en-US&gl=US'
         },
         {
             'name': 'MarketWatch',

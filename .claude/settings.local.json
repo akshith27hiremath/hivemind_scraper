@@ -12,7 +12,8 @@
       "Bash(do echo \"Testing $ticker...\")",
       "Bash(done)",
       "Bash(python -c:*)",
-      "Bash(docker-compose build:*)"
+      "Bash(docker-compose build:*)",
+      "Bash(python -m json.tool:*)"
     ]
   }
 }

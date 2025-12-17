@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S&P 500 News Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .health-badge {
+            font-size: 0.85rem;
+            padding: 0.35rem 0.65rem;
+        }
+        .article-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-bottom: 1rem;
+        }
+        .article-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .source-badge {
+            font-size: 0.75rem;
+        }
+        .filter-section {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stats-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stats-card h3 {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            margin: 0;
+        }
+        .stats-card p {
+            margin: 0;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        .health-status {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status-healthy { background-color: #28a745; }
+        .status-warning { background-color: #ffc107; }
+        .status-error { background-color: #dc3545; }
+        .status-degraded { background-color: #fd7e14; }
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-dark">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">
+                <i class="bi bi-newspaper"></i> S&P 500 News Dashboard
+            </span>
+            <div class="d-flex align-items-center">
+                <span id="overall-health" class="health-badge badge bg-secondary me-3">
+                    <i class="bi bi-activity"></i> Checking...
+                </span>
+                <button class="btn btn-outline-light btn-sm" onclick="refreshAll()">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Statistics Row -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <h3 id="total-articles">-</h3>
+                    <p>Total Articles</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <h3 id="recent-articles">-</h3>
+                    <p>Last 24 Hours</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <h3 id="unique-sources">-</h3>
+                    <p>Data Sources</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <h3 id="health-services">-</h3>
+                    <p>Services Status</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Health Status Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-heart-pulse"></i> System Health</h5>
+                        <button class="btn btn-sm btn-primary" onclick="checkHealth()">
+                            <i class="bi bi-arrow-clockwise"></i> Check Now
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="health-status" class="row">
+                            <div class="col-12 text-center text-muted">
+                                <i class="bi bi-hourglass-split"></i> Loading health status...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters Section -->
+        <div class="filter-section">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label"><i class="bi bi-funnel"></i> Source</label>
+                    <select id="filter-source" class="form-select">
+                        <option value="all">All Sources</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><i class="bi bi-search"></i> Keyword</label>
+                    <input type="text" id="filter-keyword" class="form-control" placeholder="Search in title/summary">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><i class="bi bi-clock-history"></i> Time Range</label>
+                    <select id="filter-days" class="form-select">
+                        <option value="">All Time</option>
+                        <option value="1">Last 24 Hours</option>
+                        <option value="7">Last 7 Days</option>
+                        <option value="30">Last 30 Days</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><i class="bi bi-list-ol"></i> Show</label>
+                    <div class="d-flex gap-2">
+                        <select id="filter-limit" class="form-select">
+                            <option value="20">20 articles</option>
+                            <option value="50" selected>50 articles</option>
+                            <option value="100">100 articles</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="applyFilters()">
+                            <i class="bi bi-funnel-fill"></i> Filter
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Articles List -->
+        <div class="row">
+            <div class="col-12">
+                <div class="loading-spinner" id="loading-spinner">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading articles...</p>
+                </div>
+
+                <div id="articles-container">
+                    <!-- Articles will be loaded here -->
+                </div>
+
+                <!-- Pagination -->
+                <div id="pagination" class="d-flex justify-content-center mt-4">
+                    <!-- Pagination buttons will be added here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentOffset = 0;
+        let currentLimit = 50;
+        let totalArticles = 0;
+
+        // Load initial data
+        window.onload = function() {
+            loadSources();
+            loadStats();
+            checkHealth();
+            loadArticles();
+
+            // Auto-refresh health every 5 minutes
+            setInterval(checkHealth, 300000);
+        };
+
+        function loadSources() {
+            fetch('/api/sources')
+                .then(res => res.json())
+                .then(data => {
+                    const select = document.getElementById('filter-source');
+                    data.sources.forEach(source => {
+                        const option = document.createElement('option');
+                        option.value = source.name;
+                        option.textContent = `${source.name} (${source.count})`;
+                        select.appendChild(option);
+                    });
+                });
+        }
+
+        function loadStats() {
+            fetch('/api/stats')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('total-articles').textContent = data.total_articles.toLocaleString();
+                    document.getElementById('recent-articles').textContent = data.recent_24h.toLocaleString();
+                    document.getElementById('unique-sources').textContent = data.unique_sources;
+                });
+        }
+
+        function checkHealth() {
+            fetch('/api/health')
+                .then(res => res.json())
+                .then(data => {
+                    const container = document.getElementById('health-status');
+                    container.innerHTML = '';
+
+                    // Update overall health badge
+                    const badge = document.getElementById('overall-health');
+                    const statusClass = {
+                        'healthy': 'bg-success',
+                        'degraded': 'bg-warning',
+                        'warning': 'bg-warning',
+                        'error': 'bg-danger'
+                    }[data.overall] || 'bg-secondary';
+                    badge.className = `health-badge badge ${statusClass}`;
+                    badge.innerHTML = `<i class="bi bi-activity"></i> ${data.overall.toUpperCase()}`;
+
+                    // Count healthy services
+                    const services = Object.values(data.services);
+                    const healthyCount = services.filter(s => s.status === 'healthy').length;
+                    document.getElementById('health-services').textContent = `${healthyCount}/${services.length}`;
+
+                    // Display each service status
+                    Object.entries(data.services).forEach(([name, status]) => {
+                        const col = document.createElement('div');
+                        col.className = 'col-md-4 mb-3';
+
+                        const statusClass = {
+                            'healthy': 'status-healthy',
+                            'warning': 'status-warning',
+                            'degraded': 'status-degraded',
+                            'error': 'status-error',
+                            'rate_limited': 'status-error',
+                            'unhealthy': 'status-error',
+                            'unconfigured': 'status-warning'
+                        }[status.status] || 'status-warning';
+
+                        col.innerHTML = `
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <span class="health-status ${statusClass}"></span>
+                                        ${name.replace(/_/g, ' ').toUpperCase()}
+                                    </h6>
+                                    <p class="card-text small mb-1">${status.message}</p>
+                                    <small class="text-muted">${new Date(status.last_check).toLocaleTimeString()}</small>
+                                </div>
+                            </div>
+                        `;
+                        container.appendChild(col);
+                    });
+                })
+                .catch(err => {
+                    console.error('Health check failed:', err);
+                    document.getElementById('overall-health').className = 'health-badge badge bg-danger';
+                    document.getElementById('overall-health').innerHTML = '<i class="bi bi-x-circle"></i> ERROR';
+                });
+        }
+
+        function loadArticles() {
+            const source = document.getElementById('filter-source').value;
+            const keyword = document.getElementById('filter-keyword').value;
+            const days = document.getElementById('filter-days').value;
+            const limit = parseInt(document.getElementById('filter-limit').value);
+
+            const params = new URLSearchParams({
+                limit: limit,
+                offset: currentOffset
+            });
+
+            if (source && source !== 'all') params.append('source', source);
+            if (keyword) params.append('keyword', keyword);
+            if (days) params.append('days', days);
+
+            document.getElementById('loading-spinner').style.display = 'block';
+            document.getElementById('articles-container').innerHTML = '';
+
+            fetch(`/api/articles?${params}`)
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('loading-spinner').style.display = 'none';
+                    totalArticles = data.total;
+                    currentLimit = data.limit;
+
+                    const container = document.getElementById('articles-container');
+
+                    if (data.articles.length === 0) {
+                        container.innerHTML = `
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i> No articles found matching your filters.
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    data.articles.forEach(article => {
+                        const card = createArticleCard(article);
+                        container.appendChild(card);
+                    });
+
+                    updatePagination();
+                });
+        }
+
+        function createArticleCard(article) {
+            const card = document.createElement('div');
+            card.className = 'card article-card';
+
+            const publishedDate = article.published_at
+                ? new Date(article.published_at).toLocaleString()
+                : 'Unknown';
+
+            const summary = article.summary
+                ? (article.summary.length > 200 ? article.summary.substring(0, 200) + '...' : article.summary)
+                : '';
+
+            card.innerHTML = `
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h5 class="card-title mb-0">
+                            <a href="${article.url}" target="_blank" class="text-decoration-none">
+                                ${article.title}
+                            </a>
+                        </h5>
+                        <span class="badge bg-primary source-badge">${article.source}</span>
+                    </div>
+                    ${summary ? `<p class="card-text text-muted">${summary}</p>` : ''}
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">
+                            <i class="bi bi-clock"></i> ${publishedDate}
+                        </small>
+                        <a href="${article.url}" target="_blank" class="btn btn-sm btn-outline-primary">
+                            Read More <i class="bi bi-box-arrow-up-right"></i>
+                        </a>
+                    </div>
+                </div>
+            `;
+
+            return card;
+        }
+
+        function updatePagination() {
+            const pagination = document.getElementById('pagination');
+            pagination.innerHTML = '';
+
+            const totalPages = Math.ceil(totalArticles / currentLimit);
+            const currentPage = Math.floor(currentOffset / currentLimit) + 1;
+
+            if (totalPages <= 1) return;
+
+            // Previous button
+            if (currentPage > 1) {
+                const prev = document.createElement('button');
+                prev.className = 'btn btn-outline-primary me-2';
+                prev.innerHTML = '<i class="bi bi-chevron-left"></i> Previous';
+                prev.onclick = () => {
+                    currentOffset -= currentLimit;
+                    loadArticles();
+                    window.scrollTo(0, 0);
+                };
+                pagination.appendChild(prev);
+            }
+
+            // Page info
+            const info = document.createElement('span');
+            info.className = 'align-self-center mx-3';
+            info.textContent = `Page ${currentPage} of ${totalPages}`;
+            pagination.appendChild(info);
+
+            // Next button
+            if (currentPage < totalPages) {
+                const next = document.createElement('button');
+                next.className = 'btn btn-outline-primary ms-2';
+                next.innerHTML = 'Next <i class="bi bi-chevron-right"></i>';
+                next.onclick = () => {
+                    currentOffset += currentLimit;
+                    loadArticles();
+                    window.scrollTo(0, 0);
+                };
+                pagination.appendChild(next);
+            }
+        }
+
+        function applyFilters() {
+            currentOffset = 0;
+            loadArticles();
+        }
+
+        function refreshAll() {
+            loadStats();
+            checkHealth();
+            loadArticles();
+        }
+
+        // Allow Enter key to trigger filter
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('filter-keyword').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    applyFilters();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
