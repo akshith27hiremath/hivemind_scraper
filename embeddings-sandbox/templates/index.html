@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Embeddings Sandbox</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        body {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #555;
+            margin-top: 30px;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: monospace;
+            resize: vertical;
+        }
+        input[type="number"] {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            width: 100px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background: #2196F3;
+        }
+        .btn-secondary:hover {
+            background: #1976D2;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #333;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+        .cluster-card {
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #4CAF50;
+        }
+        .cluster-title {
+            font-weight: bold;
+            color: #2e7d32;
+            margin-bottom: 10px;
+        }
+        .cluster-headline {
+            padding: 5px 10px;
+            background: white;
+            border-radius: 4px;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+        .cluster-headline.centroid {
+            background: #c8e6c9;
+            font-weight: 500;
+        }
+        .pair-row {
+            display: grid;
+            grid-template-columns: 1fr 80px 1fr 60px;
+            gap: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+        .pair-headline {
+            font-size: 13px;
+            color: #333;
+        }
+        .similarity-score {
+            text-align: center;
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        .high-sim {
+            background: #c8e6c9;
+            color: #2e7d32;
+        }
+        .med-sim {
+            background: #fff9c4;
+            color: #f57f17;
+        }
+        .low-sim {
+            background: #ffcdd2;
+            color: #c62828;
+        }
+        .would-cluster {
+            font-size: 11px;
+            color: #666;
+        }
+        .noise-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .noise-item {
+            background: #f0f0f0;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+        .error {
+            color: #c62828;
+            background: #ffebee;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 15px;
+        }
+        label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #666;
+        }
+        .help-text {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+        }
+        #compare-section {
+            display: none;
+        }
+        .match-row {
+            display: grid;
+            grid-template-columns: 1fr 100px;
+            gap: 10px;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            margin-bottom: 6px;
+        }
+        .sample-headlines {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .sample-headlines h4 {
+            margin: 0 0 10px 0;
+            color: #1565c0;
+        }
+        .sample-btn {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Embeddings Sandbox</h1>
+    <p>Test how sentence transformer embeddings cluster news headlines.</p>
+
+    <div class="section">
+        <h2>1. Enter Headlines</h2>
+
+        <div class="sample-headlines">
+            <h4>Sample Headlines</h4>
+            <button class="sample-btn" onclick="loadSampleDuplicates()">Load Duplicate Examples</button>
+            <button class="sample-btn" onclick="loadSampleMixed()">Load Mixed Examples</button>
+            <button class="sample-btn" onclick="loadSampleUnique()">Load Unique Examples</button>
+        </div>
+
+        <textarea id="headlines" placeholder="Enter headlines, one per line...
+
+Example:
+Apple reports record Q4 earnings
+AAPL beats Wall Street estimates in Q4
+Apple Q4 profits exceed analyst expectations
+Tesla announces new Gigafactory
+Microsoft acquires gaming studio"></textarea>
+        <p class="help-text">Enter at least 2 headlines to compare. Each line is treated as a separate headline.</p>
+
+        <div class="controls">
+            <label>
+                Similarity Threshold:
+                <input type="number" id="threshold" value="0.78" min="0" max="1" step="0.01">
+            </label>
+            <button onclick="analyzeHeadlines()">Analyze Headlines</button>
+        </div>
+    </div>
+
+    <div id="results" class="section" style="display: none;">
+        <h2>2. Results</h2>
+
+        <div id="stats" class="stats"></div>
+
+        <h3>Detected Clusters</h3>
+        <div id="clusters"></div>
+
+        <h3>Unique Articles (No Matches)</h3>
+        <div id="noise"></div>
+
+        <h3>All Similarity Pairs</h3>
+        <div id="pairs"></div>
+    </div>
+
+    <div id="compare-section" class="section">
+        <h2>3. Compare New Headline</h2>
+        <p>Compare a new headline against all analyzed headlines above.</p>
+        <input type="text" id="new-headline" placeholder="Enter a headline to compare...">
+        <button onclick="compareHeadline()" class="btn-secondary">Find Similar</button>
+        <div id="compare-results" style="margin-top: 15px;"></div>
+    </div>
+
+    <script>
+        const sampleDuplicates = `Apple reports record Q4 earnings beating expectations
+AAPL beats Wall Street estimates in fourth quarter
+Apple Q4 profits exceed analyst expectations
+Apple quarterly earnings surpass forecasts
+Tesla announces new Gigafactory in Texas
+Tesla to build new factory in Texas, Musk says
+TSLA reveals plans for Texas Gigafactory
+Microsoft acquires gaming studio for $2B
+Microsoft buys game developer in $2 billion deal
+MSFT announces gaming studio acquisition`;
+
+        const sampleMixed = `Apple reports record Q4 earnings
+AAPL beats Wall Street estimates
+Tesla announces new Gigafactory
+Bitcoin surges past $100,000
+Federal Reserve holds rates steady
+Amazon expands AWS services
+Google launches new AI model
+Netflix subscriber growth slows
+Meta unveils new VR headset
+Oil prices fall on demand concerns`;
+
+        const sampleUnique = `Apple releases new iPhone 16
+Tesla recalls 2 million vehicles
+Google faces antitrust lawsuit
+Amazon Prime Day breaks records
+Microsoft Azure outage affects users
+Netflix announces price increase
+Meta lays off 10,000 workers
+Bitcoin mining uses renewable energy
+Federal Reserve Chair speaks on inflation
+Oil prices surge on Middle East tensions`;
+
+        function loadSampleDuplicates() {
+            document.getElementById('headlines').value = sampleDuplicates;
+        }
+
+        function loadSampleMixed() {
+            document.getElementById('headlines').value = sampleMixed;
+        }
+
+        function loadSampleUnique() {
+            document.getElementById('headlines').value = sampleUnique;
+        }
+
+        async function analyzeHeadlines() {
+            const headlines = document.getElementById('headlines').value
+                .split('\n')
+                .map(h => h.trim())
+                .filter(h => h);
+            const threshold = parseFloat(document.getElementById('threshold').value);
+
+            if (headlines.length < 2) {
+                alert('Please enter at least 2 headlines');
+                return;
+            }
+
+            document.getElementById('results').style.display = 'block';
+            document.getElementById('stats').innerHTML = '<p class="loading">Analyzing...</p>';
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({headlines, threshold})
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    document.getElementById('stats').innerHTML = `<p class="error">${data.error}</p>`;
+                    return;
+                }
+
+                // Stats
+                document.getElementById('stats').innerHTML = `
+                    <div class="stat-box">
+                        <div class="stat-value">${data.stats.total_headlines}</div>
+                        <div class="stat-label">Total Headlines</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">${data.stats.num_clusters}</div>
+                        <div class="stat-label">Clusters</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">${data.stats.num_unique}</div>
+                        <div class="stat-label">Unique</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">${data.stats.num_duplicates}</div>
+                        <div class="stat-label">Duplicates</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">${data.stats.dedup_rate}%</div>
+                        <div class="stat-label">Dedup Rate</div>
+                    </div>
+                `;
+
+                // Clusters
+                if (data.clusters.length > 0) {
+                    document.getElementById('clusters').innerHTML = data.clusters.map(c => `
+                        <div class="cluster-card">
+                            <div class="cluster-title">Cluster ${c.cluster_id + 1} (${c.size} articles)</div>
+                            ${c.headlines.map((h, i) => `
+                                <div class="cluster-headline ${i === 0 ? 'centroid' : ''}">${h}</div>
+                            `).join('')}
+                        </div>
+                    `).join('');
+                } else {
+                    document.getElementById('clusters').innerHTML = '<p>No clusters found at this threshold.</p>';
+                }
+
+                // Noise points
+                if (data.noise_points.length > 0) {
+                    document.getElementById('noise').innerHTML = `
+                        <div class="noise-list">
+                            ${data.noise_points.map(h => `<div class="noise-item">${h}</div>`).join('')}
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('noise').innerHTML = '<p>All headlines were clustered.</p>';
+                }
+
+                // Pairs
+                document.getElementById('pairs').innerHTML = data.pairs.map(p => {
+                    let simClass = 'low-sim';
+                    if (p.similarity >= 0.78) simClass = 'high-sim';
+                    else if (p.similarity >= 0.5) simClass = 'med-sim';
+
+                    return `
+                        <div class="pair-row">
+                            <div class="pair-headline">${p.headline1}</div>
+                            <div class="similarity-score ${simClass}">${p.similarity.toFixed(3)}</div>
+                            <div class="pair-headline">${p.headline2}</div>
+                            <div class="would-cluster">${p.would_cluster ? 'CLUSTER' : ''}</div>
+                        </div>
+                    `;
+                }).join('');
+
+                // Show compare section
+                document.getElementById('compare-section').style.display = 'block';
+
+            } catch (error) {
+                document.getElementById('stats').innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+
+        async function compareHeadline() {
+            const headline = document.getElementById('new-headline').value.trim();
+            if (!headline) {
+                alert('Please enter a headline');
+                return;
+            }
+
+            document.getElementById('compare-results').innerHTML = '<p class="loading">Comparing...</p>';
+
+            try {
+                const response = await fetch('/compare', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({headline})
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    document.getElementById('compare-results').innerHTML = `<p class="error">${data.error}</p>`;
+                    return;
+                }
+
+                document.getElementById('compare-results').innerHTML = `
+                    <h4>Top Matches for: "${data.query}"</h4>
+                    ${data.matches.map(m => {
+                        let simClass = 'low-sim';
+                        if (m.similarity >= 0.78) simClass = 'high-sim';
+                        else if (m.similarity >= 0.5) simClass = 'med-sim';
+
+                        return `
+                            <div class="match-row">
+                                <div>${m.headline}</div>
+                                <div class="similarity-score ${simClass}">${m.similarity.toFixed(3)}</div>
+                            </div>
+                        `;
+                    }).join('')}
+                `;
+
+            } catch (error) {
+                document.getElementById('compare-results').innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
