@@ -6,6 +6,7 @@
     <title>S&P 500 News Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <style>
         body {
             background-color: #f8f9fa;
@@ -69,6 +70,31 @@
             text-align: center;
             padding: 2rem;
         }
+        .cluster-card {
+            background: #e8f5e9;
+            border-left: 4px solid #4CAF50;
+            margin-bottom: 1rem;
+        }
+        .cluster-article {
+            padding: 8px 12px;
+            background: white;
+            border-radius: 4px;
+            margin-bottom: 6px;
+        }
+        .cluster-article.centroid {
+            background: #c8e6c9;
+            font-weight: 500;
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 2rem;
+        }
+        .nav-tabs .nav-link.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
     </style>
 </head>
 <body>
@@ -90,6 +116,30 @@
     </nav>
 
     <div class="container-fluid mt-4">
+        <!-- Navigation Tabs -->
+        <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="articles-tab" data-bs-toggle="tab" data-bs-target="#articles-view" type="button" role="tab">
+                    <i class="bi bi-newspaper"></i> Articles
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="clusters-tab" data-bs-toggle="tab" data-bs-target="#clusters-view" type="button" role="tab" onclick="loadClusters()">
+                    <i class="bi bi-diagram-3"></i> Clusters
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="analytics-tab" data-bs-toggle="tab" data-bs-target="#analytics-view" type="button" role="tab" onclick="loadSourceBreakdown()">
+                    <i class="bi bi-pie-chart"></i> Source Analytics
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="mainTabContent">
+            <!-- Articles View -->
+            <div class="tab-pane fade show active" id="articles-view" role="tabpanel">
+
         <!-- Statistics Row -->
         <div class="row mb-4">
             <div class="col-md-3">
@@ -197,6 +247,73 @@
                 </div>
             </div>
         </div>
+
+            </div>
+            <!-- End Articles View -->
+
+            <!-- Clusters View -->
+            <div class="tab-pane fade" id="clusters-view" role="tabpanel">
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> Showing clusters from latest embeddings batch. Articles in the same cluster cover similar stories.
+                        </div>
+                    </div>
+                </div>
+
+                <div id="cluster-stats" class="row mb-4"></div>
+
+                <div class="loading-spinner" id="cluster-loading-spinner">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading clusters...</p>
+                </div>
+
+                <div id="clusters-container"></div>
+            </div>
+            <!-- End Clusters View -->
+
+            <!-- Source Analytics View -->
+            <div class="tab-pane fade" id="analytics-view" role="tabpanel">
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <h4><i class="bi bi-pie-chart-fill"></i> Source Distribution Analysis</h4>
+                        <p class="text-muted">Breakdown of articles by source</p>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="bi bi-collection"></i> Total Articles by Source</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="total-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="bi bi-calendar-day"></i> Last 24 Hours by Source</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="daily-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- End Source Analytics View -->
+
+        </div>
+        <!-- End Tab Content -->
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -443,6 +560,251 @@
                 }
             });
         });
+
+        // Cluster viewing functionality
+        let clustersLoaded = false;
+
+        function loadClusters() {
+            if (clustersLoaded) return; // Only load once
+
+            document.getElementById('cluster-loading-spinner').style.display = 'block';
+            document.getElementById('clusters-container').innerHTML = '';
+
+            fetch('/api/clusters')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('cluster-loading-spinner').style.display = 'none';
+                    clustersLoaded = true;
+
+                    // Show stats
+                    const statsDiv = document.getElementById('cluster-stats');
+                    statsDiv.innerHTML = `
+                        <div class="col-md-4">
+                            <div class="stats-card">
+                                <h3>${data.total_clusters}</h3>
+                                <p>Total Clusters</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="stats-card">
+                                <h3>${data.clusters.reduce((sum, c) => sum + c.size, 0)}</h3>
+                                <p>Clustered Articles</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="stats-card">
+                                <h3>${(data.clusters.reduce((sum, c) => sum + c.size, 0) / data.total_clusters).toFixed(1)}</h3>
+                                <p>Avg Cluster Size</p>
+                            </div>
+                        </div>
+                    `;
+
+                    const container = document.getElementById('clusters-container');
+
+                    if (data.clusters.length === 0) {
+                        container.innerHTML = `
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle"></i> ${data.message || 'No clusters found'}
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    data.clusters.forEach((cluster, idx) => {
+                        const clusterCard = document.createElement('div');
+                        clusterCard.className = 'card cluster-card';
+
+                        let articlesHtml = cluster.articles.map((article, articleIdx) => {
+                            const centroidClass = article.is_centroid ? 'centroid' : '';
+                            const centroidBadge = article.is_centroid ? '<span class="badge bg-success ms-2">CENTROID</span>' : '';
+                            const publishedDate = article.published_at
+                                ? new Date(article.published_at).toLocaleString()
+                                : 'Unknown';
+
+                            // Color-code similarity score
+                            let similarityClass = 'bg-success';
+                            if (article.similarity < 0.7) similarityClass = 'bg-warning';
+                            if (article.similarity < 0.6) similarityClass = 'bg-danger';
+
+                            return `
+                                <div class="cluster-article ${centroidClass}">
+                                    <div class="d-flex justify-content-between align-items-start mb-1">
+                                        <div class="flex-grow-1">
+                                            <span class="badge ${similarityClass} me-2" style="font-size: 0.7rem;">${(article.similarity * 100).toFixed(1)}%</span>
+                                            <a href="${article.url}" target="_blank" class="text-decoration-none">
+                                                ${article.title}
+                                            </a>
+                                            ${centroidBadge}
+                                        </div>
+                                        <span class="badge bg-primary source-badge ms-2">${article.source}</span>
+                                    </div>
+                                    <small class="text-muted"><i class="bi bi-clock"></i> ${publishedDate}</small>
+                                </div>
+                            `;
+                        }).join('');
+
+                        // Color-code average similarity
+                        let avgSimClass = 'bg-success';
+                        if (cluster.avg_similarity < 0.7) avgSimClass = 'bg-warning';
+                        if (cluster.avg_similarity < 0.6) avgSimClass = 'bg-danger';
+
+                        clusterCard.innerHTML = `
+                            <div class="card-header">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-diagram-3-fill"></i> Cluster #${cluster.cluster_label}
+                                    <span class="badge bg-secondary ms-2">${cluster.size} articles</span>
+                                    <span class="badge ${avgSimClass} ms-2">Avg: ${(cluster.avg_similarity * 100).toFixed(1)}%</span>
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <small class="text-muted mb-2 d-block">
+                                    <i class="bi bi-info-circle"></i> Articles ranked by correlation to centroid (highest to lowest)
+                                </small>
+                                ${articlesHtml}
+                            </div>
+                        `;
+
+                        container.appendChild(clusterCard);
+                    });
+                })
+                .catch(err => {
+                    console.error('Failed to load clusters:', err);
+                    document.getElementById('cluster-loading-spinner').style.display = 'none';
+                    document.getElementById('clusters-container').innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="bi bi-x-circle"></i> Error loading clusters: ${err.message}
+                        </div>
+                    `;
+                });
+        }
+
+        // Source analytics functionality
+        let chartsLoaded = false;
+        let totalChart = null;
+        let dailyChart = null;
+
+        function loadSourceBreakdown() {
+            if (chartsLoaded) return; // Only load once
+
+            fetch('/api/source-breakdown')
+                .then(res => res.json())
+                .then(data => {
+                    chartsLoaded = true;
+
+                    // Generate colors
+                    const colors = generateColors(Math.max(data.total.length, data.daily.length));
+
+                    // Total chart
+                    const totalCtx = document.getElementById('total-chart').getContext('2d');
+                    totalChart = new Chart(totalCtx, {
+                        type: 'pie',
+                        data: {
+                            labels: data.total.map(s => s.source),
+                            datasets: [{
+                                data: data.total.map(s => s.count),
+                                backgroundColor: colors
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'right',
+                                    labels: {
+                                        font: {
+                                            size: 11
+                                        },
+                                        generateLabels: function(chart) {
+                                            const data = chart.data;
+                                            const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                            return data.labels.map((label, i) => {
+                                                const value = data.datasets[0].data[i];
+                                                const percentage = ((value / total) * 100).toFixed(1);
+                                                return {
+                                                    text: `${label}: ${value} (${percentage}%)`,
+                                                    fillStyle: data.datasets[0].backgroundColor[i],
+                                                    index: i
+                                                };
+                                            });
+                                        }
+                                    }
+                                },
+                                title: {
+                                    display: false
+                                }
+                            }
+                        }
+                    });
+
+                    // Daily chart
+                    const dailyCtx = document.getElementById('daily-chart').getContext('2d');
+                    dailyChart = new Chart(dailyCtx, {
+                        type: 'pie',
+                        data: {
+                            labels: data.daily.map(s => s.source),
+                            datasets: [{
+                                data: data.daily.map(s => s.count),
+                                backgroundColor: colors
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'right',
+                                    labels: {
+                                        font: {
+                                            size: 11
+                                        },
+                                        generateLabels: function(chart) {
+                                            const data = chart.data;
+                                            const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                            return data.labels.map((label, i) => {
+                                                const value = data.datasets[0].data[i];
+                                                const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                                return {
+                                                    text: `${label}: ${value} (${percentage}%)`,
+                                                    fillStyle: data.datasets[0].backgroundColor[i],
+                                                    index: i
+                                                };
+                                            });
+                                        }
+                                    }
+                                },
+                                title: {
+                                    display: false
+                                }
+                            }
+                        }
+                    });
+                })
+                .catch(err => {
+                    console.error('Failed to load source breakdown:', err);
+                });
+        }
+
+        function generateColors(count) {
+            // Generate visually distinct colors
+            const baseColors = [
+                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+                '#FF9F40', '#FF6384', '#C9CBCF', '#4BC0C0', '#FF6384',
+                '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'
+            ];
+
+            if (count <= baseColors.length) {
+                return baseColors.slice(0, count);
+            }
+
+            // Generate additional colors if needed
+            const colors = [...baseColors];
+            for (let i = baseColors.length; i < count; i++) {
+                const hue = (i * 137.5) % 360; // Golden angle approximation
+                colors.push(`hsl(${hue}, 70%, 60%)`);
+            }
+            return colors;
+        }
     </script>
 </body>
 </html>

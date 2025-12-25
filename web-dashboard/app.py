@@ -159,6 +159,126 @@ def get_stats():
     })
 
 
+@app.route('/api/clusters')
+def get_clusters():
+    """
+    Get ALL cluster results across all batches.
+
+    Returns clusters with their articles, sorted by size.
+    """
+    with db_manager.get_connection() as conn:
+        with conn.cursor() as cur:
+            # Get cluster data with correlation scores from ALL batches
+            # Note: distance_to_centroid is stored as (1 - similarity), so similarity = 1 - distance
+            cur.execute("""
+                WITH cluster_info AS (
+                    SELECT
+                        ac.cluster_batch_id,
+                        ac.cluster_label,
+                        COUNT(*) as size,
+                        ARRAY_AGG(a.title ORDER BY ac.distance_to_centroid ASC NULLS LAST) as titles,
+                        ARRAY_AGG(a.url ORDER BY ac.distance_to_centroid ASC NULLS LAST) as urls,
+                        ARRAY_AGG(a.source ORDER BY ac.distance_to_centroid ASC NULLS LAST) as sources,
+                        ARRAY_AGG(ac.is_centroid ORDER BY ac.distance_to_centroid ASC NULLS LAST) as centroids,
+                        ARRAY_AGG(a.published_at ORDER BY ac.distance_to_centroid ASC NULLS LAST) as published_dates,
+                        ARRAY_AGG(COALESCE(1.0 - ac.distance_to_centroid, 1.0) ORDER BY ac.distance_to_centroid ASC NULLS LAST) as similarities,
+                        AVG(COALESCE(1.0 - ac.distance_to_centroid, 1.0)) as avg_similarity
+                    FROM article_clusters ac
+                    JOIN articles_raw a ON ac.article_id = a.id
+                    WHERE ac.clustering_method = 'embeddings'
+                        AND ac.cluster_label <> -1
+                    GROUP BY ac.cluster_batch_id, ac.cluster_label
+                    HAVING COUNT(*) >= 2
+                )
+                SELECT * FROM cluster_info
+                WHERE avg_similarity < 0.999
+                ORDER BY avg_similarity DESC, size DESC
+            """)
+
+            clusters = cur.fetchall()
+
+    # Format clusters
+    formatted_clusters = []
+    for cluster in clusters:
+        batch_id, label, size, titles, urls, sources, centroids, dates, similarities, avg_similarity = cluster
+
+        articles = []
+        for i in range(len(titles)):
+            articles.append({
+                'title': titles[i],
+                'url': urls[i],
+                'source': sources[i],
+                'is_centroid': centroids[i],
+                'published_at': dates[i].isoformat() if dates[i] else None,
+                'similarity': round(float(similarities[i]), 3)
+            })
+
+        formatted_clusters.append({
+            'batch_id': str(batch_id),
+            'cluster_label': label,
+            'size': size,
+            'avg_similarity': round(float(avg_similarity), 3),
+            'articles': articles
+        })
+
+    return jsonify({
+        'clusters': formatted_clusters,
+        'total_clusters': len(formatted_clusters)
+    })
+
+
+@app.route('/api/source-breakdown')
+def get_source_breakdown():
+    """
+    Get source breakdown for pie charts.
+
+    Returns total and daily (last 24h) article counts by source.
+    Combines SEC sources and Seeking Alpha ticker-specific sources.
+    """
+    with db_manager.get_connection() as conn:
+        with conn.cursor() as cur:
+            # Total breakdown with source aggregation
+            cur.execute("""
+                SELECT
+                    CASE
+                        WHEN source LIKE 'SEC EDGAR%' THEN 'SEC EDGAR (All Filings)'
+                        WHEN source LIKE 'Seeking Alpha (%' THEN 'Seeking Alpha'
+                        WHEN source LIKE 'Finnhub (SeekingAlpha)%' THEN 'Seeking Alpha'
+                        ELSE source
+                    END as grouped_source,
+                    COUNT(*) as count
+                FROM articles_raw
+                GROUP BY grouped_source
+                ORDER BY count DESC
+            """)
+            total_results = cur.fetchall()
+
+            # Daily breakdown (last 24 hours) with same aggregation
+            cur.execute("""
+                SELECT
+                    CASE
+                        WHEN source LIKE 'SEC EDGAR%' THEN 'SEC EDGAR (All Filings)'
+                        WHEN source LIKE 'Seeking Alpha (%' THEN 'Seeking Alpha'
+                        WHEN source LIKE 'Finnhub (SeekingAlpha)%' THEN 'Seeking Alpha'
+                        ELSE source
+                    END as grouped_source,
+                    COUNT(*) as count
+                FROM articles_raw
+                WHERE published_at >= NOW() - INTERVAL '24 hours'
+                GROUP BY grouped_source
+                ORDER BY count DESC
+            """)
+            daily_results = cur.fetchall()
+
+    total_breakdown = [{'source': row[0], 'count': row[1]} for row in total_results]
+    daily_breakdown = [{'source': row[0], 'count': row[1]} for row in daily_results]
+
+    return jsonify({
+        'total': total_breakdown,
+        'daily': daily_breakdown
+    })
+
+
 @app.route('/api/health')
 def health_check():
     """
