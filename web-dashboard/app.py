@@ -48,7 +48,7 @@ def get_articles():
 
     # Build query
     query = """
-        SELECT url, title, summary, source, published_at, fetched_at
+        SELECT url, title, summary, source, published_at, fetched_at, classification_label
         FROM articles_raw
         WHERE 1=1
     """
@@ -72,7 +72,7 @@ def get_articles():
 
     # Get total count for pagination
     count_query = query.split('ORDER BY')[0].replace(
-        'SELECT url, title, summary, source, published_at, fetched_at',
+        'SELECT url, title, summary, source, published_at, fetched_at, classification_label',
         'SELECT COUNT(*)'
     )
 
@@ -96,6 +96,7 @@ def get_articles():
             'source': article[3],
             'published_at': article[4].isoformat() if article[4] else None,
             'fetched_at': article[5].isoformat() if article[5] else None,
+            'classification_label': article[6] if len(article) > 6 else None,
         })
 
     return jsonify({

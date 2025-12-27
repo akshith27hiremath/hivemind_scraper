@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-A production-grade news aggregation and deduplication system for S&P 500 companies. The system ingests financial news from multiple sources (RSS feeds, APIs, SEC filings), stores them in PostgreSQL, and uses **semantic embeddings clustering** to identify duplicate/related articles across sources.
+A production-grade news aggregation and deduplication system for S&P 500 companies. The system ingests financial news from multiple sources (RSS feeds, APIs, SEC filings), stores them in PostgreSQL, uses **semantic embeddings clustering** to identify duplicate/related articles, and employs **teacher-student classification** to filter out opinion articles and clickbait before clustering.
 
 ### Architecture: Archive-First
 
@@ -199,6 +199,215 @@ services:
 
 ---
 
+## Teacher-Student Classification System
+
+**Status**: ✅ Phase 2 Complete - DistilBERT trained (86.50% accuracy)
+**Purpose**: Filter out opinion articles and clickbait BEFORE clustering
+**Goal**: Only cluster FACTUAL articles for knowledge graph ingestion
+
+### Architecture
+
+```
+Articles (50K+)
+      │
+      ▼
+TeacherStudentFilter (STEP 0)
+  ├── GPT-4o labels training data (3000 labeled)
+  ├── Student classifier (DistilBERT recommended)
+  └── 3-way: FACTUAL / OPINION / SLOP
+      │
+      ▼ (only FACTUAL articles)
+SentenceEmbeddingClusterer (STEP 1)
+  └── Cluster related news
+      │
+      ▼
+Knowledge Graph (future)
+```
+
+### Classification Categories
+
+| Category | Description | Examples |
+|----------|-------------|----------|
+| **FACTUAL** | Verifiable events, data releases | "Apple Reports Q4 Revenue of $119.6B", "Tesla Appoints New CFO" |
+| **OPINION** | Analysis, predictions, commentary | "Why Apple Could Rally 20%", "Stocks Fall Amid Recession Fears" |
+| **SLOP** | Clickbait, listicles, vague teasers | "5 AI Stocks to Buy Now", "Is This the Next Amazon?" |
+
+### Training Data (Completed Dec 2025)
+
+**Teacher Labeling Stats**:
+- **Total labels**: 3,000 articles
+- **Cost**: $4.13 ($1.38 for 1000 + $2.75 for 2000)
+- **Time**: ~1.5 hours total
+- **Provider**: OpenAI GPT-4o
+
+**Label Distribution**:
+| Label | Count | Percentage |
+|-------|-------|------------|
+| FACTUAL | 1,655 | 55.2% |
+| OPINION | 1,117 | 37.2% |
+| SLOP | 228 | 7.6% |
+
+**Checkpoint Saving**: Labels saved every 100 articles to prevent data loss
+
+### Student Models
+
+#### ✅ DistilBERT (Recommended - Production)
+- **Model**: `distilbert-base-uncased` (66M params)
+- **Accuracy**: 86.50% (best model)
+- **Speed**: ~65 articles/second (XPU), ~30/sec (CPU)
+- **Memory**: ~500MB
+- **Location**: `src/models/bert_classifier/final/`
+- **Training Time**: 7.5 minutes on Intel XPU
+
+**Per-Class Performance**:
+| Class | Precision | Recall | F1-Score |
+|-------|-----------|--------|----------|
+| FACTUAL | 90.66% | 90.94% | 90.80% |
+| OPINION | 82.02% | 83.86% | 82.93% |
+| SLOP | 77.50% | 67.39% | 72.09% |
+
+#### Option 2: MPNet Embeddings + LogisticRegression (Legacy)
+- **Model**: `all-mpnet-base-v2` (768-dim) + sklearn LogisticRegression
+- **Accuracy**: 78.33% (cross-validation: 78.97% ± 1.17%)
+- **Speed**: ~200 articles/second (CPU)
+- **Memory**: ~440MB
+- **Location**: `src/models/student_classifier_v1.pkl`
+
+**Per-Class Performance**:
+| Class | Precision | Recall | F1-Score |
+|-------|-----------|--------|----------|
+| FACTUAL | 87% | 85% | 86% |
+| OPINION | 78% | 67% | 72% |
+| SLOP | 46% | 85% | 60% |
+
+**Issues**: SLOP has too many false positives, OPINION recall too low
+
+#### Note: DeBERTa-v3-base Not Used
+DeBERTa's disentangled attention mechanism requires ~12GB+ VRAM.
+8GB XPU is insufficient. DistilBERT achieves similar accuracy with 40% less memory.
+
+### Components
+
+**Teacher Model** (Training Phase):
+- **Provider**: OpenAI GPT-4o (Anthropic Claude supported)
+- **Cost**: ~$1.38 per 1000 articles
+- **Purpose**: Label training data with high accuracy
+- **Location**: `processing-worker/src/mechanical_refinery/teacher_student/teacher_labeler.py`
+
+**Student Model** (Production):
+- **Architecture**: DistilBERT fine-tuned for 3-class classification (66M params)
+- **Accuracy**: 86.50% on held-out test set
+- **Location**: `processing-worker/src/models/bert_classifier/final/`
+
+**Filter Class** (Pipeline Integration):
+- **Archive-First**: Marks articles, never deletes
+- **Database columns**: `classification_label`, `classification_confidence`, `ready_for_kg`
+- **Location**: `processing-worker/src/mechanical_refinery/teacher_student/filter.py`
+
+### Database Schema Changes
+
+**New columns on `articles_raw`:**
+```sql
+classification_label VARCHAR(20)           -- 'FACTUAL', 'OPINION', 'SLOP'
+classification_confidence DOUBLE PRECISION -- 0.0-1.0
+classification_source VARCHAR(20)          -- 'teacher' or 'student'
+classification_model_version VARCHAR(50)   -- Model identifier
+classified_at TIMESTAMP                    -- When classified
+ready_for_kg BOOLEAN                       -- TRUE for FACTUAL articles
+```
+
+**New table `teacher_labels`** (3,000 rows):
+- Stores all teacher-generated labels for retraining
+- Audit trail for prompt iterations
+- Schema: article_id, label, confidence, reasoning, teacher_model, prompt_version
+
+### Training Scripts
+
+**1. Sandbox Web Interface** (Testing & Iteration):
+```bash
+cd processing-worker
+python sandbox_labeler.py --provider openai
+# Opens at http://localhost:5050
+```
+Features:
+- Test random articles from database
+- Input custom headlines/summaries
+- **Live prompt editor** - modify classification rules in real-time
+- **Hot-reload** - prompt changes reflect immediately without restart
+- Displays headline + summary + classification + reasoning
+
+**2. Teacher Labeling** (Generate Training Data):
+```bash
+# Estimate cost first
+python label_with_teacher.py --estimate-only --num-articles 3000
+
+# Label articles (excludes SEC EDGAR, saves every 100)
+python label_with_teacher.py --provider openai --num-articles 3000 --yes
+```
+Output: Labels saved to `teacher_labels` table with checkpoints every 100 articles
+
+**3. Train Embedding Student Model** (MPNet):
+```bash
+POSTGRES_HOST=localhost python train_student_model.py
+```
+Output: `src/models/student_classifier_v1.pkl`
+
+**4. Train BERT Student Model** (DistilBERT - recommended):
+```bash
+HF_HUB_ENABLE_HF_TRANSFER=0 POSTGRES_HOST=localhost python train_bert_classifier.py --model distilbert-base-uncased
+```
+Output: `src/models/bert_classifier/final/` (86.50% accuracy)
+
+**5. Dry Run Testing**:
+```bash
+python test_classification_dry_run.py --num-articles 500 --verbose
+```
+Output: Classification distribution, accuracy metrics, source breakdown
+
+### Key Design Decisions
+
+1. **Includes headline + summary** - Better context for classification
+2. **3-way classification** - More granular than binary KEEP/DISCARD
+3. **Teacher-only labeling** - No manual labeling required
+4. **Stratified sampling** - Proportional representation from all sources
+5. **SEC EDGAR excluded** - Form 4/8-K filings too different from news articles
+6. **Archive-first compliant** - Marks articles, never deletes
+7. **Checkpoint saving** - Teacher labels saved every 100 articles (max loss: 100)
+8. **Upgraded to MPNet** - Changed from MiniLM-L6-v2 to all-mpnet-base-v2 for better quality
+
+### Current Status & Next Steps
+
+**✅ Completed:**
+- Database migration applied
+- Sandbox with hot-reload and custom input
+- Teacher labeling: 3,000 articles labeled ($4.13)
+- MPNet student model trained (78.33% accuracy)
+- DistilBERT trained (86.50% accuracy) - **RECOMMENDED**
+- Checkpoint saving implemented
+- Model comparison complete (DistilBERT wins by +8.17%)
+
+**⏭️ Next:**
+1. Validate on dry run test with production data
+2. Integrate into pipeline.py before clustering
+3. Deploy to production
+
+### Cost Analysis
+
+**Teacher Labeling (One-time)**:
+- 3,000 articles: $4.13
+- Future labels: ~$1.38 per 1,000 articles
+
+**Student Inference (Ongoing)**:
+- $0.00 (runs locally on CPU/XPU)
+- Speed: ~65 articles/second (XPU), ~30/sec (CPU)
+
+**Comparison**:
+- API-only approach: $502/year (1000 articles/day)
+- Student model approach: $4.13 one-time
+- **Savings**: $498/year (124x cheaper)
+
+---
+
 ## Clustering System
 
 ### APPROVED: Sentence Embeddings Clustering
@@ -207,6 +416,7 @@ services:
 **Algorithm**: Greedy similarity clustering
 **Threshold**: 0.78 cosine similarity
 **Window**: 36-hour publication windows
+**Input**: FACTUAL articles only (after classification filter)
 
 ```python
 from processing_worker.src.mechanical_refinery.clustering import SentenceEmbeddingClusterer
@@ -334,15 +544,21 @@ python cluster_all_articles.py
 - Web dashboard with cluster viewing
 - Embeddings clustering tested on all historical data
 
-### Approved for Development
-1. **Processing-worker deployment** - Add to docker-compose, set up cron
-2. **Additional filter layer** - User mentioned adding a filter before clustering
-3. **Incremental clustering** - Only process new articles (optimization)
+### ✅ Completed (Dec 2025)
+1. **Teacher-Student Classification System** - Filters articles into FACTUAL/OPINION/SLOP
+2. **Sandbox Web Interface** - Live testing at http://localhost:5050
+3. **Database Schema Migration** - Classification columns + teacher_labels table
+4. **Training Infrastructure** - Scripts for teacher labeling, student training, dry-run testing
+
+### In Progress
+1. **Prompt refinement** - Edge cases like "Analysis with embedded facts" (e.g., Datadog example)
+2. **Teacher labeling** - Ready to label 3000-4000 articles once prompt is finalized
 
 ### Not Approved / Paused
 - DBSCAN clustering (deprecated)
 - MinHash clustering (untested)
 - Verb filter / entity density filters (future)
+- Processing-worker deployment to droplet (waiting for classification deployment)
 
 ---
 
@@ -374,11 +590,14 @@ POSTGRES_HOST=localhost python test_clustering_dry_run.py
 
 ## Important Constraints
 
-1. **No deployment to droplet yet** - User wants to add filter layer first
+1. **No deployment to droplet yet** - User wants to finalize classification filter first
 2. **Embeddings only** - DBSCAN is deprecated, don't suggest it
 3. **Archive-first** - Never delete articles, only add metadata
-4. **SEC EDGAR excluded** - Form 4/8-K filings excluded from clustering (too noisy)
+4. **SEC EDGAR excluded** - Form 4/8-K filings excluded from ALL processing (clustering, classification)
 5. **36-hour windows** - Cluster articles published within same 36h period
+6. **Docker PostgreSQL ONLY** - NEVER use local PostgreSQL installation. Stop it with `net stop postgresql-x64-17` if running. All database access must go through Docker container `sp500_postgres`
+7. **Classification before clustering** - Pipeline order: classify → filter FACTUAL → cluster
+8. **Headline + Summary** - Teacher classifier sees both for better context (not just headline)
 
 ---
 
@@ -388,7 +607,11 @@ POSTGRES_HOST=localhost python test_clustering_dry_run.py
 |------------|------------|
 | Add new RSS feed | `ingestion-worker/src/config.py` → `RSS_FEEDS` |
 | Modify clustering | `processing-worker/src/mechanical_refinery/clustering.py` |
+| Modify classification prompt | Sandbox: http://localhost:5050 (live editor) OR `teacher_labeler.py` line 30 |
+| Test classification | `processing-worker/sandbox_labeler.py` (web UI) |
+| Train classifier | `processing-worker/train_student_model.py` |
 | Add API endpoint | `web-dashboard/app.py` |
-| Change database schema | `database/schema/01_init.sql` (+ migration) |
+| Change database schema | `database/schema/*.sql` (+ migration) |
 | Debug ingestion | `docker-compose logs ingestion-worker` |
 | Run clustering | `processing-worker/run_clustering_to_db.py` |
+| Label training data | `processing-worker/label_with_teacher.py --num-articles 3000` |

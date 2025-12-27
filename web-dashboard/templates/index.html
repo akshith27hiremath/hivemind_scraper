@@ -474,6 +474,18 @@
                 ? (article.summary.length > 200 ? article.summary.substring(0, 200) + '...' : article.summary)
                 : '';
 
+            // Classification badge
+            let classificationBadge = '';
+            if (article.classification_label) {
+                const label = article.classification_label;
+                let badgeClass = 'bg-secondary';
+                if (label === 'FACTUAL') badgeClass = 'bg-success';
+                else if (label === 'OPINION') badgeClass = 'bg-warning text-dark';
+                else if (label === 'SLOP') badgeClass = 'bg-danger';
+
+                classificationBadge = `<span class="badge ${badgeClass} source-badge me-1">${label}</span>`;
+            }
+
             card.innerHTML = `
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start mb-2">
@@ -482,7 +494,10 @@
                                 ${article.title}
                             </a>
                         </h5>
-                        <span class="badge bg-primary source-badge">${article.source}</span>
+                        <div>
+                            ${classificationBadge}
+                            <span class="badge bg-primary source-badge">${article.source}</span>
+                        </div>
                     </div>
                     ${summary ? `<p class="card-text text-muted">${summary}</p>` : ''}
                     <div class="d-flex justify-content-between align-items-center">
