@@ -323,7 +323,7 @@ def save_cluster_updates(db, result):
 
 def mark_as_noise(db, articles):
     """Mark articles as noise (no cluster match)."""
-    batch_id = uuid.uuid4()
+    batch_id = str(uuid.uuid4())
 
     with db.get_connection() as conn:
         with conn.cursor() as cur:
@@ -335,7 +335,7 @@ def mark_as_noise(db, articles):
                         is_cluster_centroid = FALSE,
                         distance_to_centroid = NULL
                     WHERE id = %s
-                """, (str(batch_id), article['id']))
+                """, (batch_id, article['id']))
 
                 cur.execute("""
                     INSERT INTO article_clusters
