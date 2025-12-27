@@ -79,7 +79,7 @@ class ProcessingDatabaseManager:
                         FROM articles_raw
                         WHERE passes_all_filters IS NULL
                           AND published_at >= %s
-                          AND (%s = FALSE OR source NOT LIKE 'SEC EDGAR%%')
+                          AND (%s = TRUE OR source NOT LIKE 'SEC EDGAR%%')
                         ORDER BY published_at DESC
                         LIMIT %s
                     """, (cutoff, not exclude_sec_edgar, limit))
@@ -88,7 +88,7 @@ class ProcessingDatabaseManager:
                         SELECT id, title, summary, source, published_at, fetched_at
                         FROM articles_raw
                         WHERE passes_all_filters IS NULL
-                          AND (%s = FALSE OR source NOT LIKE 'SEC EDGAR%%')
+                          AND (%s = TRUE OR source NOT LIKE 'SEC EDGAR%%')
                         ORDER BY published_at DESC
                         LIMIT %s
                     """, (not exclude_sec_edgar, limit))
@@ -310,3 +310,234 @@ class ProcessingDatabaseManager:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("SELECT * FROM v_processing_stats")
                 return dict(cur.fetchone())
+
+    # =========================================================================
+    # TEACHER-STUDENT CLASSIFICATION METHODS
+    # =========================================================================
+
+    def get_unlabeled_articles_sample(
+        self,
+        limit: int = 1000,
+        stratify_by_source: bool = True
+    ) -> List[Dict]:
+        """
+        Get diverse sample of unlabeled articles for teacher labeling.
+
+        IMPORTANT: Excludes SEC EDGAR sources entirely.
+
+        Args:
+            limit: Maximum number of articles to return
+            stratify_by_source: If True, sample proportionally from each source
+
+        Returns:
+            List of article dicts with id, title, summary, source
+        """
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                if stratify_by_source:
+                    # Proportional sampling by source (excludes SEC EDGAR)
+                    cur.execute("""
+                        WITH source_counts AS (
+                            SELECT source, COUNT(*) as cnt
+                            FROM articles_raw
+                            WHERE id NOT IN (SELECT article_id FROM teacher_labels)
+                              AND source NOT LIKE 'SEC EDGAR%%'
+                            GROUP BY source
+                        ),
+                        total AS (
+                            SELECT SUM(cnt) as total_cnt FROM source_counts
+                        ),
+                        ranked AS (
+                            SELECT a.id, a.title, a.summary, a.source, a.published_at,
+                                   ROW_NUMBER() OVER (PARTITION BY a.source ORDER BY RANDOM()) as rn,
+                                   sc.cnt,
+                                   t.total_cnt
+                            FROM articles_raw a
+                            JOIN source_counts sc ON a.source = sc.source
+                            CROSS JOIN total t
+                            WHERE a.id NOT IN (SELECT article_id FROM teacher_labels)
+                        )
+                        SELECT id, title, summary, source, published_at
+                        FROM ranked
+                        WHERE rn <= GREATEST(1, CEIL(cnt::float * %s / total_cnt))
+                        ORDER BY RANDOM()
+                        LIMIT %s
+                    """, (limit, limit))
+                else:
+                    # Random sampling (excludes SEC EDGAR)
+                    cur.execute("""
+                        SELECT id, title, summary, source, published_at
+                        FROM articles_raw
+                        WHERE id NOT IN (SELECT article_id FROM teacher_labels)
+                          AND source NOT LIKE 'SEC EDGAR%%'
+                        ORDER BY RANDOM()
+                        LIMIT %s
+                    """, (limit,))
+
+                return [dict(row) for row in cur.fetchall()]
+
+    def get_unclassified_articles(
+        self,
+        limit: int = 1000,
+        publication_window_hours: int = None
+    ) -> List[Dict]:
+        """
+        Get articles that haven't been classified yet.
+
+        IMPORTANT: Excludes SEC EDGAR sources entirely.
+
+        Args:
+            limit: Maximum number of articles
+            publication_window_hours: Only get articles from last N hours
+
+        Returns:
+            List of article dicts
+        """
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                if publication_window_hours:
+                    cutoff = datetime.now() - timedelta(hours=publication_window_hours)
+                    cur.execute("""
+                        SELECT id, title, summary, source, published_at
+                        FROM articles_raw
+                        WHERE classification_label IS NULL
+                          AND source NOT LIKE 'SEC EDGAR%%'
+                          AND published_at >= %s
+                        ORDER BY published_at DESC
+                        LIMIT %s
+                    """, (cutoff, limit))
+                else:
+                    cur.execute("""
+                        SELECT id, title, summary, source, published_at
+                        FROM articles_raw
+                        WHERE classification_label IS NULL
+                          AND source NOT LIKE 'SEC EDGAR%%'
+                        ORDER BY published_at DESC
+                        LIMIT %s
+                    """, (limit,))
+
+                return [dict(row) for row in cur.fetchall()]
+
+    def save_teacher_labels(self, labels: List[Dict]):
+        """
+        Save teacher labels for retraining.
+
+        Args:
+            labels: List of dicts with article_id, label, confidence,
+                    reasoning, teacher_model, prompt_version
+        """
+        if not labels:
+            return
+
+        with self.get_connection() as conn:
+            with conn.cursor() as cur:
+                execute_batch(cur, """
+                    INSERT INTO teacher_labels
+                        (article_id, label, confidence, reasoning, teacher_model, prompt_version)
+                    VALUES (%(article_id)s, %(label)s, %(confidence)s,
+                            %(reasoning)s, %(teacher_model)s, %(prompt_version)s)
+                    ON CONFLICT (article_id, teacher_model, prompt_version)
+                    DO UPDATE SET label = EXCLUDED.label,
+                                  confidence = EXCLUDED.confidence,
+                                  reasoning = EXCLUDED.reasoning,
+                                  labeled_at = CURRENT_TIMESTAMP
+                """, labels)
+
+        logger.info(f"Saved {len(labels)} teacher labels")
+
+    def get_teacher_labels(self, prompt_version: str = 'v1') -> List[Dict]:
+        """
+        Get all teacher labels for training.
+
+        Args:
+            prompt_version: Filter by prompt version
+
+        Returns:
+            List of dicts with article text and label
+        """
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT a.id, a.title, a.summary, a.source, t.label, t.confidence
+                    FROM teacher_labels t
+                    JOIN articles_raw a ON t.article_id = a.id
+                    WHERE t.label IN ('FACTUAL', 'OPINION', 'SLOP')
+                      AND t.prompt_version = %s
+                      AND a.source NOT LIKE 'SEC EDGAR%%'
+                """, (prompt_version,))
+                return [dict(row) for row in cur.fetchall()]
+
+    def batch_update_classification_status(self, updates: List[Dict]):
+        """
+        Update classification status for multiple articles.
+
+        Args:
+            updates: List of dicts with article_id, classification_label,
+                     classification_confidence, classification_source,
+                     classification_model_version
+        """
+        if not updates:
+            return
+
+        with self.get_connection() as conn:
+            with conn.cursor() as cur:
+                execute_batch(cur, """
+                    UPDATE articles_raw
+                    SET classification_label = %(classification_label)s,
+                        classification_confidence = %(classification_confidence)s,
+                        classification_source = %(classification_source)s,
+                        classification_model_version = %(classification_model_version)s,
+                        classified_at = NOW(),
+                        ready_for_kg = (%(classification_label)s = 'FACTUAL')
+                    WHERE id = %(article_id)s
+                """, updates)
+
+        logger.info(f"Updated classification for {len(updates)} articles")
+
+    def get_classification_stats(self) -> Dict:
+        """
+        Get classification statistics (excludes SEC EDGAR).
+
+        Returns:
+            Dict with counts per category
+        """
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT
+                        COUNT(*) FILTER (WHERE classification_label = 'FACTUAL') as factual_count,
+                        COUNT(*) FILTER (WHERE classification_label = 'OPINION') as opinion_count,
+                        COUNT(*) FILTER (WHERE classification_label = 'SLOP') as slop_count,
+                        COUNT(*) FILTER (WHERE classification_label IS NULL
+                                         AND source NOT LIKE 'SEC EDGAR%%') as unclassified_count,
+                        COUNT(*) FILTER (WHERE ready_for_kg = TRUE) as ready_for_kg_count,
+                        (SELECT COUNT(*) FROM teacher_labels) as teacher_label_count
+                    FROM articles_raw
+                    WHERE source NOT LIKE 'SEC EDGAR%%'
+                """)
+                return dict(cur.fetchone())
+
+    def get_articles_for_kg(self, limit: int = 1000) -> List[Dict]:
+        """
+        Get FACTUAL articles ready for knowledge graph ingestion.
+
+        IMPORTANT: Only returns articles marked ready_for_kg = TRUE.
+
+        Args:
+            limit: Maximum number of articles
+
+        Returns:
+            List of article dicts
+        """
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT id, url, title, summary, source, published_at,
+                           classification_confidence
+                    FROM articles_raw
+                    WHERE ready_for_kg = TRUE
+                      AND source NOT LIKE 'SEC EDGAR%%'
+                    ORDER BY published_at DESC
+                    LIMIT %s
+                """, (limit,))
+                return [dict(row) for row in cur.fetchall()]
