@@ -12,8 +12,15 @@ sentence-transformers==2.3.1
 torch>=2.2.0  # User may install torch with XPU support separately
 datasketch==1.6.4
 
+# Teacher-Student Classification
+openai>=1.0.0  # For GPT-4o teacher labeling
+anthropic>=0.18.0  # For Claude Sonnet teacher labeling
+
 # Utilities
 psutil==5.9.8
+
+# Web Interface
+flask>=3.0.0  # For sandbox labeler
 
 # Testing
 pytest==8.1.1
