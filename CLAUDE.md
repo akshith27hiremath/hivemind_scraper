@@ -1,6 +1,6 @@
 # S&P 500 News Aggregation System - Project Context
 
-**Last Updated**: 2025-12-27
+**Last Updated**: 2026-02-11
 
 ## Project Overview
 
@@ -19,8 +19,8 @@ The system follows an **Archive-First** philosophy:
 | Environment | Status | Details |
 |-------------|--------|---------|
 | **Digital Ocean Droplet** | ✅ FULLY DEPLOYED | 2 CPU / 4GB RAM, all 4 services running |
-| **Local Development** | STOPPED | Use droplet for all operations |
-| **Database** | ~52,204 articles | 32,670 classified, 16,237 FACTUAL, 2,534 clusters |
+| **Local Development** | ✅ Active | Synced DB for dev/testing, Docker containers available |
+| **Database** | ~149K articles | 112K+ classified, 53K FACTUAL, 9,019 clusters, 58% dedup |
 
 ### Production URL
 - **Web Dashboard**: http://159.89.162.233:5000
@@ -28,74 +28,13 @@ The system follows an **Archive-First** philosophy:
 
 ---
 
-## Directory Structure
+## Key Directories
 
-```
-scraperMVP/
-├── database/                    # PostgreSQL setup
-│   ├── Dockerfile
-│   └── schema/
-│       ├── 01_init.sql         # Core schema (companies, articles_raw)
-│       └── 02_seed_companies.sql # S&P 500 data (503 companies)
-│
-├── ingestion-worker/            # [DEPLOYED] News collection service
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── src/
-│       ├── main.py             # Entry point
-│       ├── scheduler.py        # Cron-like task scheduling
-│       ├── config.py           # Environment config + RSS feed URLs
-│       ├── database.py         # DatabaseManager class
-│       ├── logger.py           # Logging setup
-│       ├── parsers/
-│       │   ├── rss_parser.py                # 10 RSS feeds
-│       │   ├── seekingalpha_ticker_parser.py # Ticker-specific SA feeds
-│       │   └── sec_parser.py                # SEC EDGAR filings
-│       └── api_clients/
-│           ├── finnhub_client.py      # Finnhub API
-│           ├── alpha_vantage_client.py # Alpha Vantage API
-│           ├── sec_cik_mapper.py       # CIK lookup
-│           └── sec_parser.py           # SEC parsing
-│
-├── processing-worker/           # [DEPLOYED] Classification + Clustering service
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── processing_scheduler.py      # MAIN: Hourly scheduler (runs in Docker)
-│   ├── incremental_clustering.py    # Match new articles to existing clusters
-│   ├── run_sliding_window_clustering.py  # One-time full clustering
-│   ├── run_one_time_classification.py    # One-time full classification
-│   ├── src/
-│   │   ├── database.py         # ProcessingDatabaseManager
-│   │   ├── config.py
-│   │   ├── logger.py
-│   │   ├── models/             # Trained models
-│   │   │   └── bert_classifier/final/  # DistilBERT (86.5% accuracy)
-│   │   └── mechanical_refinery/
-│   │       ├── clustering.py   # SentenceEmbeddingClusterer
-│   │       └── teacher_student/
-│   │           ├── bert_classifier.py  # BertClassifier class
-│   │           ├── teacher_labeler.py  # GPT-4o labeling
-│   │           └── filter.py           # TeacherStudentFilter
-│   │
-│   ├── train_bert_classifier.py     # Train DistilBERT model
-│   ├── label_with_teacher.py        # Generate training labels
-│   ├── sandbox_labeler.py           # Web UI for testing
-│   └── test_classification_dry_run.py  # Dry run testing
-│
-├── web-dashboard/               # [DEPLOYED] Flask web UI
-│   ├── Dockerfile
-│   ├── app.py                  # Flask routes + API endpoints
-│   └── templates/
-│       └── index.html          # Dashboard UI
-│
-├── scripts/
-│   ├── fetch_sp500.py                    # Regenerate S&P 500 seed data
-│   └── sync_database_from_droplet.sh     # Pull DB from production
-│
-├── docker-compose.yml           # Local orchestration
-├── .env                         # Environment variables (gitignored)
-└── CLAUDE.md                    # THIS FILE
-```
+- `ingestion-worker/` — News collection (RSS, APIs, SEC EDGAR)
+- `processing-worker/` — Classification + Clustering (hourly scheduler)
+- `web-dashboard/` — Flask dashboard with dark theme
+- `database/schema/` — PostgreSQL migrations
+- `scripts/` — Sync scripts for pulling production data locally
 
 ---
 
@@ -115,7 +54,7 @@ cik VARCHAR(10)                     -- SEC CIK for EDGAR lookups
 created_at TIMESTAMP
 ```
 
-#### `articles_raw` (~52,204 rows)
+#### `articles_raw` (~149K rows)
 All ingested news articles. **Never deleted**.
 ```sql
 id SERIAL PRIMARY KEY
@@ -142,7 +81,7 @@ is_cluster_centroid BOOLEAN         -- TRUE = representative article
 distance_to_centroid DOUBLE         -- Similarity distance
 ```
 
-#### `article_clusters` (~31,000+ rows)
+#### `article_clusters` (~53K rows)
 Audit table for clustering decisions. One row per article per clustering batch.
 ```sql
 id SERIAL PRIMARY KEY
@@ -287,25 +226,7 @@ Knowledge Graph (future)
 | OPINION | 82.02% | 83.86% | 82.93% |
 | SLOP | 77.50% | 67.39% | 72.09% |
 
-#### Option 2: MPNet Embeddings + LogisticRegression (Legacy)
-- **Model**: `all-mpnet-base-v2` (768-dim) + sklearn LogisticRegression
-- **Accuracy**: 78.33% (cross-validation: 78.97% ± 1.17%)
-- **Speed**: ~200 articles/second (CPU)
-- **Memory**: ~440MB
-- **Location**: `src/models/student_classifier_v1.pkl`
-
-**Per-Class Performance**:
-| Class | Precision | Recall | F1-Score |
-|-------|-----------|--------|----------|
-| FACTUAL | 87% | 85% | 86% |
-| OPINION | 78% | 67% | 72% |
-| SLOP | 46% | 85% | 60% |
-
-**Issues**: SLOP has too many false positives, OPINION recall too low
-
-#### Note: DeBERTa-v3-base Not Used
-DeBERTa's disentangled attention mechanism requires ~12GB+ VRAM.
-8GB XPU is insufficient. DistilBERT achieves similar accuracy with 40% less memory.
+*Other models tested (MPNet, DeBERTa) — DistilBERT won. See `train_bert_classifier.py` for history.*
 
 ### Components
 
@@ -325,22 +246,7 @@ DeBERTa's disentangled attention mechanism requires ~12GB+ VRAM.
 - **Database columns**: `classification_label`, `classification_confidence`, `ready_for_kg`
 - **Location**: `processing-worker/src/mechanical_refinery/teacher_student/filter.py`
 
-### Database Schema Changes
-
-**New columns on `articles_raw`:**
-```sql
-classification_label VARCHAR(20)           -- 'FACTUAL', 'OPINION', 'SLOP'
-classification_confidence DOUBLE PRECISION -- 0.0-1.0
-classification_source VARCHAR(20)          -- 'teacher' or 'student'
-classification_model_version VARCHAR(50)   -- Model identifier
-classified_at TIMESTAMP                    -- When classified
-ready_for_kg BOOLEAN                       -- TRUE for FACTUAL articles
-```
-
-**New table `teacher_labels`** (3,000 rows):
-- Stores all teacher-generated labels for retraining
-- Audit trail for prompt iterations
-- Schema: article_id, label, confidence, reasoning, teacher_model, prompt_version
+*Schema columns documented in Database Schema section above. Teacher labels in `teacher_labels` table (3,000 rows).*
 
 ### Training Scripts
 
@@ -394,23 +300,11 @@ Output: Classification distribution, accuracy metrics, source breakdown
 5. **SEC EDGAR excluded** - Form 4/8-K filings too different from news articles
 6. **Archive-first compliant** - Marks articles, never deletes
 7. **Checkpoint saving** - Teacher labels saved every 100 articles (max loss: 100)
-8. **Upgraded to MPNet** - Changed from MiniLM-L6-v2 to all-mpnet-base-v2 for better quality
+8. **Title-only embeddings** - Clustering uses title only (62.6% of articles lack summary)
 
-### Current Status & Next Steps
+### Current Status
 
-**✅ Completed:**
-- Database migration applied
-- Sandbox with hot-reload and custom input
-- Teacher labeling: 3,000 articles labeled ($4.13)
-- MPNet student model trained (78.33% accuracy)
-- DistilBERT trained (86.50% accuracy) - **RECOMMENDED**
-- Checkpoint saving implemented
-- Model comparison complete (DistilBERT wins by +8.17%)
-
-**⏭️ Next:**
-1. Validate on dry run test with production data
-2. Integrate into pipeline.py before clustering
-3. Deploy to production
+**✅ Fully deployed and running in production since Dec 2025.** 112K+ articles classified, hourly automation active.
 
 ### Cost Analysis
 
@@ -436,7 +330,7 @@ Output: Classification distribution, accuracy metrics, source breakdown
 **Model**: `all-MiniLM-L6-v2` (384-dim embeddings)
 **Algorithm**: Greedy similarity clustering
 **Threshold**: 0.5 cosine similarity (production)
-**Window**: 36-hour publication windows
+**Window**: 48-hour publication windows
 **Input**: FACTUAL articles only (after classification filter)
 
 ```python
@@ -453,10 +347,10 @@ result = clusterer.cluster_articles(articles)
 ### Incremental Clustering (Hourly)
 
 New articles are matched to **existing cluster centroids** before creating new clusters:
-1. Fetch recently classified FACTUAL articles (last 2 hours)
-2. Group by 36-hour publication windows
+1. Fetch recently classified FACTUAL articles (last 6 hours, via `fetched_at`)
+2. Group by 48-hour publication windows (24h calendar-day buckets)
 3. For each window:
-   - Match new articles to existing centroids (similarity ≥ 0.5)
+   - Match new articles to existing centroids (title-only embeddings, similarity ≥ 0.5)
    - Cluster unmatched articles among themselves
    - Mark isolated articles as noise (cluster_label = -1)
 
@@ -464,25 +358,19 @@ New articles are matched to **existing cluster centroids** before creating new c
 - `processing_scheduler.py` - Hourly automation (runs in Docker)
 - `incremental_clustering.py` - Match-to-centroid logic
 - `run_sliding_window_clustering.py` - One-time full clustering
+- `run_local_reprocess.py` - Local classify + full recluster from scratch
 
-**Production Results** (from 16K FACTUAL articles):
-- 2,534+ clusters created
-- 21.9% deduplication rate (3,542 duplicates)
-- 3-4 seconds per 1,600 articles
+**Production Results** (from 53K FACTUAL articles, Feb 2026 recluster):
+- 9,019 clusters created (22,165 centroids)
+- 58% deduplication rate (30,617 duplicates)
+- 13,146 noise points (unique articles)
 - Memory: ~1.1 GB peak (fits in 4GB droplet)
 
-### DEPRECATED: DBSCAN Clustering
+**Embedding input**: Title-only (consistent across initial clustering and centroid matching).
 
-**Status**: Code exists but **DO NOT USE**. Failed testing due to:
-- Poor cluster quality with TF-IDF
-- Inconsistent threshold behavior
-- Worse performance than embeddings
+### DEPRECATED: DBSCAN / MinHash
 
-The `DBSCANClusterer` class remains in code for reference but is not recommended.
-
-### DEPRECATED: MinHash Clustering
-
-**Status**: Code exists but **NOT TESTED**. Lower priority than embeddings.
+Code exists but **DO NOT USE**. Embeddings approach is production-proven.
 
 ---
 
@@ -549,27 +437,25 @@ docker-compose logs -f web-dashboard
 docker-compose build web-dashboard && docker-compose up -d web-dashboard
 ```
 
-### Running Clustering Locally
+### Running Processing Locally
 ```bash
-# Set host for local database
-export POSTGRES_HOST=localhost
-
-# Dry run (read-only)
+set POSTGRES_HOST=localhost
 cd processing-worker
-python test_clustering_dry_run.py
 
-# Cluster and save to DB
-python run_clustering_to_db.py
+# Full reprocess (classify orphans + wipe + recluster everything)
+python run_local_reprocess.py
+python run_local_reprocess.py --dry-run
+python run_local_reprocess.py --skip-classification
 
-# Cluster ALL historical data
-python cluster_all_articles.py
+# One-time sliding window clustering
+python run_sliding_window_clustering.py --dry-run
 ```
 
 ---
 
 ## Current State & Next Steps
 
-### ✅ FULLY OPERATIONAL (Dec 2025)
+### ✅ FULLY OPERATIONAL (Feb 2026)
 
 **Production System Running at http://159.89.162.233:5000**
 
@@ -577,36 +463,21 @@ python cluster_all_articles.py
 |-----------|--------|---------|
 | **Ingestion** | ✅ Running | 10 RSS + APIs + SEC, ~1,360 articles/day |
 | **Classification** | ✅ Running | DistilBERT @ 86.5% accuracy, hourly at :00 |
-| **Clustering** | ✅ Running | Incremental matching, hourly at :05 |
-| **Web Dashboard** | ✅ Running | Cluster viewing, source analytics |
-| **Database** | ✅ Healthy | 52K+ articles, 2,534 clusters |
+| **Clustering** | ✅ Running | 48h windows, title-only embeddings, hourly at :05 |
+| **Web Dashboard** | ✅ Running | Dark theme, similarity slider, source analytics |
+| **Database** | ✅ Healthy | 149K articles, 112K classified, 53K FACTUAL, 9K clusters |
 
 ### Automated Processing Pipeline
 
 The processing-worker runs `processing_scheduler.py` which:
-1. **Classification at :00** - Classifies articles from last 2 hours
-2. **Clustering at :05** - Clusters FACTUAL articles from last 2 hours
+1. **Classification at :00** - Classifies articles fetched in last 2 hours (uses `fetched_at`, not `published_at`)
+2. **Clustering at :05** - Clusters FACTUAL articles from last 6 hours
 3. **Data freshness**: <1 hour for new articles
 
-**Key Scripts (in processing-worker/):**
-- `processing_scheduler.py` - Main hourly scheduler (runs in Docker)
-- `incremental_clustering.py` - Matches new articles to existing cluster centroids
-- `run_sliding_window_clustering.py` - One-time full clustering
-- `run_one_time_classification.py` - One-time full classification
-
-### ✅ Completed (Dec 2025)
-1. **Teacher-Student Classification** - 3,000 GPT-4o labels, DistilBERT trained (86.5%)
-2. **Production Deployment** - All 4 services running on droplet
-3. **Hourly Automation** - Classification and incremental clustering every hour
-4. **One-time Historical Processing** - 32,670 articles classified, 16,237 FACTUAL clustered
-5. **Database Schema Migration** - Classification + clustering columns applied
-6. **Web Dashboard** - Cluster viewing, source analytics, health checks
-
-### Not Approved / Paused
-- DBSCAN clustering (deprecated - use embeddings)
-- MinHash clustering (untested)
-- Verb filter / entity density filters (future)
-- Knowledge graph integration (future)
+### Future Work
+- Knowledge graph integration
+- Entity extraction pipeline
+- Verb filter / entity density filters
 
 ---
 
@@ -641,12 +512,12 @@ POSTGRES_HOST=localhost python test_clustering_dry_run.py
 1. **Embeddings only** - DBSCAN is deprecated, don't suggest it
 2. **Archive-first** - Never delete articles, only add metadata
 3. **SEC EDGAR excluded** - Form 4/8-K filings excluded from ALL processing (clustering, classification)
-4. **36-hour windows** - Cluster articles published within same 36h period
+4. **48-hour windows** - Cluster articles published within same 48h period
 5. **Docker PostgreSQL ONLY** - NEVER use local PostgreSQL installation. Stop it with `net stop postgresql-x64-17` if running. All database access must go through Docker container `sp500_postgres`
 6. **Classification before clustering** - Pipeline order: classify → filter FACTUAL → cluster
 7. **Headline + Summary** - Classifier sees both for better context (not just headline)
 8. **UUID as string** - Always convert `uuid.uuid4()` to `str()` for psycopg2 compatibility
-9. **Production is primary** - Local containers stopped; use SSH to droplet for operations
+9. **Both environments active** - Droplet runs production; local Docker available for dev/testing
 
 ---
 
@@ -665,6 +536,7 @@ POSTGRES_HOST=localhost python test_clustering_dry_run.py
 | Debug processing | `ssh droplet` → `docker-compose logs -f processing-worker` |
 | Run one-time clustering | `processing-worker/run_sliding_window_clustering.py` |
 | Run one-time classification | `processing-worker/run_one_time_classification.py` |
+| Full local reprocess | `processing-worker/run_local_reprocess.py` |
 | Label training data | `processing-worker/label_with_teacher.py --num-articles 3000` |
 | Check scheduler status | `ssh droplet` → `docker-compose logs -f processing-worker` |
 
@@ -680,10 +552,14 @@ POSTGRES_HOST=localhost python test_clustering_dry_run.py
 **Web dashboard not updating after code changes**:
 ```bash
 ssh root@159.89.162.233
-cd ~/scraperMVP
-docker-compose down
-docker-compose up -d
+cd ~/hivemind_scraper
+docker-compose stop web-dashboard && docker-compose rm -f web-dashboard
+docker-compose build web-dashboard && docker-compose up -d web-dashboard
 ```
+
+**docker-compose v1 `KeyError: 'ContainerConfig'`**:
+- Droplet runs docker-compose 1.29.2 which has this bug after builds
+- Workaround: `docker-compose stop X && docker-compose rm -f X && docker-compose up -d X`
 
 **Classification/clustering not running**:
 ```bash
@@ -718,6 +594,8 @@ docker exec sp500_postgres psql -U scraper_user -d sp500_news -c \
 # Restart a service
 docker-compose restart processing-worker
 
-# Rebuild and restart (after code push)
-git pull && docker-compose build processing-worker && docker-compose up -d processing-worker
+# Rebuild and restart (after code push) — use stop/rm/up for docker-compose v1
+git pull && docker-compose build processing-worker && \
+docker-compose stop processing-worker && docker-compose rm -f processing-worker && \
+docker-compose up -d processing-worker
 ```
