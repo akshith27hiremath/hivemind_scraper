@@ -402,8 +402,8 @@ class ProcessingDatabaseManager:
                         FROM articles_raw
                         WHERE classification_label IS NULL
                           AND source NOT LIKE 'SEC EDGAR%%'
-                          AND published_at >= %s
-                        ORDER BY published_at DESC
+                          AND fetched_at >= %s
+                        ORDER BY fetched_at DESC
                         LIMIT %s
                     """, (cutoff, limit))
                 else:
@@ -412,7 +412,7 @@ class ProcessingDatabaseManager:
                         FROM articles_raw
                         WHERE classification_label IS NULL
                           AND source NOT LIKE 'SEC EDGAR%%'
-                        ORDER BY published_at DESC
+                        ORDER BY fetched_at DESC
                         LIMIT %s
                     """, (limit,))
 

@@ -27,8 +27,8 @@ logger = setup_logger(__name__)
 
 def main():
     parser = argparse.ArgumentParser(description='Sliding window clustering')
-    parser.add_argument('--window-hours', type=int, default=36,
-                        help='Size of each time window in hours (default: 36)')
+    parser.add_argument('--window-hours', type=int, default=48,
+                        help='Size of each time window in hours (default: 48)')
     parser.add_argument('--threshold', type=float, default=0.5,
                         help='Similarity threshold (default: 0.5)')
     parser.add_argument('--dry-run', action='store_true',

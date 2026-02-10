@@ -48,6 +48,29 @@ services:
     volumes:
       - ./ingestion-worker:/app/ingestion-worker:ro
 
+  processing-worker:
+    build:
+      context: ./processing-worker
+      dockerfile: Dockerfile
+    container_name: sp500_processing_worker
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - sp500_network
+    restart: unless-stopped
+    volumes:
+      - ./processing-worker/src/models:/app/src/models:ro
+      - ./processing-worker:/app:ro
+    command: python processing_scheduler.py
+
   web-dashboard:
     build:
       context: ./web-dashboard

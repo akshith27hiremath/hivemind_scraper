@@ -25,3 +25,4 @@ flask>=3.0.0  # For sandbox labeler
 # Testing
 pytest==8.1.1
 pytest-cov==4.1.0
+transformers>=4.36.0

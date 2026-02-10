@@ -8,116 +8,1038 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <style>
+        /* ===== CSS CUSTOM PROPERTIES ===== */
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #1c2333;
+            --bg-card: #161b22;
+            --bg-card-hover: #1c2333;
+            --bg-input: #0d1117;
+            --border-primary: #30363d;
+            --border-subtle: #21262d;
+            --border-accent: #388bfd33;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --text-link: #58a6ff;
+            --accent-blue: #388bfd;
+            --accent-blue-dim: #388bfd22;
+            --accent-green: #3fb950;
+            --accent-green-dim: #3fb95022;
+            --accent-yellow: #d29922;
+            --accent-yellow-dim: #d2992222;
+            --accent-red: #f85149;
+            --accent-red-dim: #f8514922;
+            --accent-purple: #a371f7;
+            --accent-purple-dim: #a371f722;
+            --accent-orange: #db6d28;
+            --accent-cyan: #39d353;
+            --gradient-brand: linear-gradient(135deg, #388bfd 0%, #a371f7 100%);
+            --gradient-card: linear-gradient(180deg, rgba(56, 139, 253, 0.06) 0%, rgba(56, 139, 253, 0) 100%);
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+            --shadow-glow-blue: 0 0 20px rgba(56, 139, 253, 0.15);
+            --shadow-glow-green: 0 0 20px rgba(63, 185, 80, 0.15);
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+            --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+            --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* ===== RESET & BASE ===== */
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
         body {
-            background-color: #f8f9fa;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            font-size: 15px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
-        .navbar {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+
+        ::selection {
+            background: var(--accent-blue);
+            color: #fff;
         }
-        .health-badge {
-            font-size: 0.85rem;
-            padding: 0.35rem 0.65rem;
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
         }
-        .article-card {
-            transition: transform 0.2s, box-shadow 0.2s;
-            margin-bottom: 1rem;
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
         }
-        .article-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-primary);
+            border-radius: 4px;
         }
-        .source-badge {
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        a {
+            color: var(--text-link);
+            text-decoration: none;
+            transition: color var(--transition-fast);
+        }
+        a:hover {
+            color: #79c0ff;
+        }
+
+        /* ===== NAVBAR ===== */
+        .navbar-main {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-primary);
+            padding: 0.75rem 1.5rem;
+            position: sticky;
+            top: 0;
+            z-index: 1030;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .navbar-brand-text {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .navbar-brand-text i {
+            background: var(--gradient-brand);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 1.25rem;
+        }
+
+        .navbar-brand-tag {
+            font-size: 0.65rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-primary);
+            border-radius: 20px;
+            padding: 0.15rem 0.5rem;
+            margin-left: 0.5rem;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }
+
+        .health-badge-main {
             font-size: 0.75rem;
+            font-weight: 500;
+            padding: 0.3rem 0.75rem;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            transition: all var(--transition-fast);
         }
-        .filter-section {
-            background: white;
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+
+        .btn-refresh {
+            background: transparent;
+            border: 1px solid var(--border-primary);
+            color: var(--text-secondary);
+            border-radius: var(--radius-sm);
+            padding: 0.35rem 0.75rem;
+            font-size: 0.8rem;
+            transition: all var(--transition-fast);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
         }
-        .stats-card {
-            background: white;
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        .btn-refresh:hover {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+            background: var(--accent-blue-dim);
         }
-        .stats-card h3 {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #667eea;
-            margin: 0;
+
+        /* ===== TAB NAVIGATION ===== */
+        .nav-tabs-custom {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            padding: 4px;
+            display: inline-flex;
+            gap: 4px;
+            margin-bottom: 1.5rem;
         }
-        .stats-card p {
-            margin: 0;
-            color: #6c757d;
+
+        .nav-tabs-custom .nav-link {
+            border: none;
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            transition: all var(--transition-fast);
+            background: transparent;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .nav-tabs-custom .nav-link:hover {
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+        }
+
+        .nav-tabs-custom .nav-link.active {
+            background: var(--accent-blue);
+            color: #fff;
+            border-color: transparent;
+            box-shadow: 0 2px 8px rgba(56, 139, 253, 0.35);
+        }
+
+        .nav-tabs-custom .nav-link i {
             font-size: 0.9rem;
         }
-        .health-status {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 5px;
+
+        /* ===== STATS CARDS ===== */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
         }
-        .status-healthy { background-color: #28a745; }
-        .status-warning { background-color: #ffc107; }
-        .status-error { background-color: #dc3545; }
-        .status-degraded { background-color: #fd7e14; }
-        .loading-spinner {
+
+        @media (max-width: 992px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 576px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+            position: relative;
+            overflow: hidden;
+            transition: all var(--transition-normal);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        }
+
+        .stat-card:nth-child(1)::before { background: var(--accent-blue); }
+        .stat-card:nth-child(2)::before { background: var(--accent-green); }
+        .stat-card:nth-child(3)::before { background: var(--accent-purple); }
+        .stat-card:nth-child(4)::before { background: var(--accent-yellow); }
+
+        .stat-card:hover {
+            border-color: var(--border-primary);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .stat-card:nth-child(1):hover { box-shadow: var(--shadow-glow-blue); }
+        .stat-card:nth-child(2):hover { box-shadow: var(--shadow-glow-green); }
+
+        .stat-card-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.35rem;
+        }
+
+        .stat-card-value {
+            font-family: var(--font-mono);
+            font-size: 1.85rem;
+            font-weight: 700;
+            line-height: 1.2;
+            margin: 0;
+        }
+
+        .stat-card:nth-child(1) .stat-card-value { color: var(--accent-blue); }
+        .stat-card:nth-child(2) .stat-card-value { color: var(--accent-green); }
+        .stat-card:nth-child(3) .stat-card-value { color: var(--accent-purple); }
+        .stat-card:nth-child(4) .stat-card-value { color: var(--accent-yellow); }
+
+        .stat-card-icon {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 2.5rem;
+            opacity: 0.06;
+        }
+
+        /* ===== HEALTH STATUS SECTION ===== */
+        .health-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+
+        .health-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.85rem 1.25rem;
+            border-bottom: 1px solid var(--border-primary);
+            background: var(--bg-tertiary);
+        }
+
+        .health-section-header h5 {
+            margin: 0;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .health-section-body {
+            padding: 1rem 1.25rem;
+        }
+
+        .health-service-card {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 0.85rem 1rem;
+            transition: border-color var(--transition-fast);
+        }
+
+        .health-service-card:hover {
+            border-color: var(--border-primary);
+        }
+
+        .health-service-name {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            margin-bottom: 0.35rem;
+        }
+
+        .health-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+
+        .health-dot.healthy {
+            background: var(--accent-green);
+            box-shadow: 0 0 6px var(--accent-green);
+        }
+        .health-dot.warning, .health-dot.unconfigured {
+            background: var(--accent-yellow);
+            box-shadow: 0 0 6px var(--accent-yellow);
+        }
+        .health-dot.degraded {
+            background: var(--accent-orange);
+            box-shadow: 0 0 6px var(--accent-orange);
+        }
+        .health-dot.error, .health-dot.unhealthy, .health-dot.rate_limited {
+            background: var(--accent-red);
+            box-shadow: 0 0 6px var(--accent-red);
+        }
+
+        .health-service-msg {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.15rem;
+        }
+
+        .health-service-time {
+            font-size: 0.7rem;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+        }
+
+        .btn-health-check {
+            background: transparent;
+            border: 1px solid var(--border-primary);
+            color: var(--text-secondary);
+            border-radius: var(--radius-sm);
+            padding: 0.3rem 0.6rem;
+            font-size: 0.75rem;
+            transition: all var(--transition-fast);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+        .btn-health-check:hover {
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+            background: var(--accent-green-dim);
+        }
+
+        /* ===== FILTER BAR ===== */
+        .filter-bar {
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .filter-bar label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 0.35rem;
+        }
+
+        .form-select-dark,
+        .form-control-dark {
+            background-color: var(--bg-input);
+            border: 1px solid var(--border-primary);
+            color: var(--text-primary);
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            padding: 0.5rem 0.75rem;
+            transition: all var(--transition-fast);
+        }
+
+        .form-select-dark:focus,
+        .form-control-dark:focus {
+            background-color: var(--bg-input);
+            border-color: var(--accent-blue);
+            color: var(--text-primary);
+            box-shadow: 0 0 0 3px var(--accent-blue-dim);
+            outline: none;
+        }
+
+        .form-select-dark option {
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        .form-control-dark::placeholder {
+            color: var(--text-muted);
+        }
+
+        .btn-filter {
+            background: var(--accent-blue);
+            border: none;
+            color: #fff;
+            border-radius: var(--radius-sm);
+            padding: 0.5rem 1.2rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all var(--transition-fast);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            white-space: nowrap;
+        }
+        .btn-filter:hover {
+            background: #58a6ff;
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(56, 139, 253, 0.35);
+        }
+
+        /* ===== ARTICLE CARDS ===== */
+        .article-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            padding: 1rem 1.25rem;
+            margin-bottom: 0.65rem;
+            transition: all var(--transition-normal);
+            position: relative;
+        }
+
+        .article-card:hover {
+            border-color: var(--accent-blue);
+            background: var(--bg-card-hover);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .article-title {
+            font-size: 1rem;
+            font-weight: 600;
+            line-height: 1.4;
+            margin-bottom: 0.35rem;
+        }
+
+        .article-title a {
+            color: var(--text-primary);
+            transition: color var(--transition-fast);
+        }
+
+        .article-title a:hover {
+            color: var(--accent-blue);
+        }
+
+        .article-summary {
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            margin-bottom: 0.6rem;
+        }
+
+        .article-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .article-timestamp {
+            font-size: 0.75rem;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .btn-read-more {
+            background: transparent;
+            border: 1px solid var(--border-primary);
+            color: var(--text-secondary);
+            border-radius: var(--radius-sm);
+            padding: 0.25rem 0.65rem;
+            font-size: 0.75rem;
+            transition: all var(--transition-fast);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+        .btn-read-more:hover {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+            background: var(--accent-blue-dim);
+        }
+
+        /* ===== BADGES ===== */
+        .badge-source {
+            font-size: 0.68rem;
+            font-weight: 500;
+            padding: 0.2rem 0.55rem;
+            border-radius: 20px;
+            background: var(--accent-blue-dim);
+            color: var(--accent-blue);
+            border: 1px solid rgba(56, 139, 253, 0.2);
+            white-space: nowrap;
+        }
+
+        .badge-factual {
+            background: var(--accent-green-dim);
+            color: var(--accent-green);
+            border: 1px solid rgba(63, 185, 80, 0.2);
+            font-size: 0.68rem;
+            font-weight: 500;
+            padding: 0.2rem 0.55rem;
+            border-radius: 20px;
+        }
+
+        .badge-opinion {
+            background: var(--accent-yellow-dim);
+            color: var(--accent-yellow);
+            border: 1px solid rgba(210, 153, 34, 0.2);
+            font-size: 0.68rem;
+            font-weight: 500;
+            padding: 0.2rem 0.55rem;
+            border-radius: 20px;
+        }
+
+        .badge-slop {
+            background: var(--accent-red-dim);
+            color: var(--accent-red);
+            border: 1px solid rgba(248, 81, 73, 0.2);
+            font-size: 0.68rem;
+            font-weight: 500;
+            padding: 0.2rem 0.55rem;
+            border-radius: 20px;
+        }
+
+        /* ===== PAGINATION ===== */
+        .pagination-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1.5rem 0;
+        }
+
+        .btn-page {
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            color: var(--text-secondary);
+            border-radius: var(--radius-sm);
+            padding: 0.4rem 0.9rem;
+            font-size: 0.82rem;
+            font-weight: 500;
+            transition: all var(--transition-fast);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            cursor: pointer;
+        }
+        .btn-page:hover {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+            background: var(--accent-blue-dim);
+        }
+
+        .page-info {
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+        }
+
+        /* ===== LOADING SPINNER ===== */
+        .loading-area {
             display: none;
             text-align: center;
-            padding: 2rem;
+            padding: 3rem;
         }
+
+        .spinner-ring {
+            width: 36px;
+            height: 36px;
+            border: 3px solid var(--border-primary);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            margin-top: 0.75rem;
+        }
+
+        /* ===== EMPTY / INFO STATES ===== */
+        .alert-dark {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            padding: 1rem 1.25rem;
+            font-size: 0.85rem;
+        }
+
+        .alert-dark i {
+            color: var(--accent-blue);
+            margin-right: 0.35rem;
+        }
+
+        .alert-dark-warning {
+            background: var(--accent-yellow-dim);
+            border: 1px solid rgba(210, 153, 34, 0.2);
+            border-radius: var(--radius-md);
+            color: var(--accent-yellow);
+            padding: 1rem 1.25rem;
+            font-size: 0.85rem;
+        }
+
+        .alert-dark-danger {
+            background: var(--accent-red-dim);
+            border: 1px solid rgba(248, 81, 73, 0.2);
+            border-radius: var(--radius-md);
+            color: var(--accent-red);
+            padding: 1rem 1.25rem;
+            font-size: 0.85rem;
+        }
+
+        /* ===== CLUSTERS ===== */
         .cluster-card {
-            background: #e8f5e9;
-            border-left: 4px solid #4CAF50;
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
             margin-bottom: 1rem;
+            overflow: hidden;
+            transition: all var(--transition-normal);
         }
-        .cluster-article {
-            padding: 8px 12px;
-            background: white;
-            border-radius: 4px;
-            margin-bottom: 6px;
+
+        .cluster-card:hover {
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 16px rgba(163, 113, 247, 0.08);
         }
-        .cluster-article.centroid {
-            background: #c8e6c9;
+
+        .cluster-card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            padding: 0.85rem 1.15rem;
+            border-bottom: 1px solid var(--border-subtle);
+            background: var(--bg-tertiary);
+        }
+
+        .cluster-card-header h5 {
+            margin: 0;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .cluster-card-body {
+            padding: 0.85rem 1.15rem;
+        }
+
+        .cluster-card-body .note-text {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-bottom: 0.65rem;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .cluster-article-item {
+            padding: 0.6rem 0.85rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            margin-bottom: 0.45rem;
+            transition: border-color var(--transition-fast);
+        }
+
+        .cluster-article-item:hover {
+            border-color: var(--border-primary);
+        }
+
+        .cluster-article-item.centroid {
+            background: var(--accent-green-dim);
+            border-color: rgba(63, 185, 80, 0.15);
+        }
+
+        .cluster-article-item .article-link {
+            font-size: 0.88rem;
             font-weight: 500;
+            color: var(--text-primary);
         }
+
+        .cluster-article-item .article-link:hover {
+            color: var(--accent-blue);
+        }
+
+        .badge-similarity {
+            font-size: 0.65rem;
+            font-family: var(--font-mono);
+            font-weight: 600;
+            padding: 0.15rem 0.45rem;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        .badge-similarity.high {
+            background: var(--accent-green-dim);
+            color: var(--accent-green);
+        }
+        .badge-similarity.medium {
+            background: var(--accent-yellow-dim);
+            color: var(--accent-yellow);
+        }
+        .badge-similarity.low {
+            background: var(--accent-red-dim);
+            color: var(--accent-red);
+        }
+
+        .badge-cluster-size {
+            font-size: 0.68rem;
+            font-family: var(--font-mono);
+            font-weight: 500;
+            padding: 0.2rem 0.55rem;
+            border-radius: 20px;
+            background: var(--accent-purple-dim);
+            color: var(--accent-purple);
+            border: 1px solid rgba(163, 113, 247, 0.2);
+        }
+
+        .badge-avg-similarity {
+            font-size: 0.68rem;
+            font-family: var(--font-mono);
+            font-weight: 500;
+            padding: 0.2rem 0.55rem;
+            border-radius: 20px;
+        }
+
+        .badge-centroid {
+            font-size: 0.62rem;
+            font-weight: 600;
+            padding: 0.15rem 0.45rem;
+            border-radius: 4px;
+            background: var(--accent-green-dim);
+            color: var(--accent-green);
+            border: 1px solid rgba(63, 185, 80, 0.2);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        /* ===== ANALYTICS CHARTS ===== */
+        .analytics-heading {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .analytics-subtitle {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            margin-bottom: 1.25rem;
+        }
+
+        .chart-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        .chart-card-header {
+            padding: 0.85rem 1.15rem;
+            border-bottom: 1px solid var(--border-subtle);
+            background: var(--bg-tertiary);
+        }
+
+        .chart-card-header h5 {
+            margin: 0;
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .chart-card-body {
+            padding: 1.25rem;
+        }
+
         .chart-container {
             position: relative;
-            height: 400px;
-            margin-bottom: 2rem;
+            height: 380px;
         }
-        .nav-tabs .nav-link.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-color: #667eea;
+
+        /* ===== UTILITY ===== */
+        .container-main {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .container-main {
+                padding: 1rem;
+            }
+        }
+
+        .gap-badges {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            flex-wrap: wrap;
+        }
+
+        /* Health badge colors for navbar */
+        .badge-health-healthy {
+            background: var(--accent-green-dim);
+            color: var(--accent-green);
+            border: 1px solid rgba(63, 185, 80, 0.25);
+        }
+        .badge-health-degraded, .badge-health-warning {
+            background: var(--accent-yellow-dim);
+            color: var(--accent-yellow);
+            border: 1px solid rgba(210, 153, 34, 0.25);
+        }
+        .badge-health-error {
+            background: var(--accent-red-dim);
+            color: var(--accent-red);
+            border: 1px solid rgba(248, 81, 73, 0.25);
+        }
+        .badge-health-checking {
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            border: 1px solid var(--border-primary);
+        }
+
+        /* Pulse animation for live indicators */
+        @keyframes pulse-green {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.4); }
+            50% { box-shadow: 0 0 0 4px rgba(63, 185, 80, 0); }
+        }
+
+        .health-dot.healthy {
+            animation: pulse-green 2s ease-in-out infinite;
+        }
+
+        /* ===== DUAL RANGE SLIDER ===== */
+        .range-slider-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            padding: 1rem 1.25rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .range-slider-label {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .range-slider-wrap {
+            flex: 1;
+            position: relative;
+            height: 36px;
+            display: flex;
+            align-items: center;
+        }
+
+        .range-slider-track {
+            position: absolute;
+            width: 100%;
+            height: 6px;
+            background: var(--border-primary);
+            border-radius: 3px;
+            pointer-events: none;
+        }
+
+        .range-slider-fill {
+            position: absolute;
+            height: 6px;
+            background: var(--accent-purple);
+            border-radius: 3px;
+            pointer-events: none;
+            opacity: 0.7;
+        }
+
+        .range-slider-wrap input[type="range"] {
+            position: absolute;
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            pointer-events: none;
+            margin: 0;
+        }
+
+        .range-slider-wrap input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: var(--accent-purple);
+            border: 2px solid var(--bg-primary);
+            border-radius: 50%;
+            cursor: pointer;
+            pointer-events: all;
+            box-shadow: 0 0 6px rgba(163, 113, 247, 0.4);
+            transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+        }
+
+        .range-slider-wrap input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            box-shadow: 0 0 10px rgba(163, 113, 247, 0.6);
+        }
+
+        .range-slider-wrap input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: var(--accent-purple);
+            border: 2px solid var(--bg-primary);
+            border-radius: 50%;
+            cursor: pointer;
+            pointer-events: all;
+            box-shadow: 0 0 6px rgba(163, 113, 247, 0.4);
+        }
+
+        .range-value-display {
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--accent-purple);
+            background: var(--accent-purple-dim);
+            border: 1px solid rgba(163, 113, 247, 0.2);
+            border-radius: var(--radius-sm);
+            padding: 0.25rem 0.55rem;
+            min-width: 48px;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .range-separator {
+            color: var(--text-muted);
+            font-size: 0.8rem;
         }
     </style>
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-dark">
-        <div class="container-fluid">
-            <span class="navbar-brand mb-0 h1">
-                <i class="bi bi-newspaper"></i> S&P 500 News Dashboard
-            </span>
-            <div class="d-flex align-items-center">
-                <span id="overall-health" class="health-badge badge bg-secondary me-3">
+    <nav class="navbar-main">
+        <div class="d-flex justify-content-between align-items-center" style="max-width: 1400px; margin: 0 auto;">
+            <div class="navbar-brand-text">
+                <i class="bi bi-graph-up-arrow"></i>
+                S&P 500 News Dashboard
+                <span class="navbar-brand-tag">Live</span>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <span id="overall-health" class="health-badge-main badge-health-checking">
                     <i class="bi bi-activity"></i> Checking...
                 </span>
-                <button class="btn btn-outline-light btn-sm" onclick="refreshAll()">
+                <button class="btn-refresh" onclick="refreshAll()">
                     <i class="bi bi-arrow-clockwise"></i> Refresh
                 </button>
             </div>
         </div>
     </nav>
 
-    <div class="container-fluid mt-4">
+    <div class="container-main">
         <!-- Navigation Tabs -->
-        <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+        <ul class="nav nav-tabs-custom" id="mainTabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="articles-tab" data-bs-toggle="tab" data-bs-target="#articles-view" type="button" role="tab">
                     <i class="bi bi-newspaper"></i> Articles
@@ -130,166 +1052,167 @@
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="analytics-tab" data-bs-toggle="tab" data-bs-target="#analytics-view" type="button" role="tab" onclick="loadSourceBreakdown()">
-                    <i class="bi bi-pie-chart"></i> Source Analytics
+                    <i class="bi bi-pie-chart"></i> Analytics
                 </button>
             </li>
         </ul>
 
         <!-- Tab Content -->
         <div class="tab-content" id="mainTabContent">
-            <!-- Articles View -->
+
+            <!-- ==================== ARTICLES VIEW ==================== -->
             <div class="tab-pane fade show active" id="articles-view" role="tabpanel">
 
-        <!-- Statistics Row -->
-        <div class="row mb-4">
-            <div class="col-md-3">
-                <div class="stats-card">
-                    <h3 id="total-articles">-</h3>
-                    <p>Total Articles</p>
+                <!-- Statistics Row -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-card-label">Total Articles</div>
+                        <div class="stat-card-value" id="total-articles">--</div>
+                        <i class="bi bi-database stat-card-icon"></i>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-label">Last 24 Hours</div>
+                        <div class="stat-card-value" id="recent-articles">--</div>
+                        <i class="bi bi-lightning stat-card-icon"></i>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-label">Data Sources</div>
+                        <div class="stat-card-value" id="unique-sources">--</div>
+                        <i class="bi bi-rss stat-card-icon"></i>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-label">Services Status</div>
+                        <div class="stat-card-value" id="health-services">--</div>
+                        <i class="bi bi-heart-pulse stat-card-icon"></i>
+                    </div>
                 </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stats-card">
-                    <h3 id="recent-articles">-</h3>
-                    <p>Last 24 Hours</p>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stats-card">
-                    <h3 id="unique-sources">-</h3>
-                    <p>Data Sources</p>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stats-card">
-                    <h3 id="health-services">-</h3>
-                    <p>Services Status</p>
-                </div>
-            </div>
-        </div>
 
-        <!-- Health Status Section -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0"><i class="bi bi-heart-pulse"></i> System Health</h5>
-                        <button class="btn btn-sm btn-primary" onclick="checkHealth()">
+                <!-- Health Status Section -->
+                <div class="health-section">
+                    <div class="health-section-header">
+                        <h5><i class="bi bi-heart-pulse"></i> System Health</h5>
+                        <button class="btn-health-check" onclick="checkHealth()">
                             <i class="bi bi-arrow-clockwise"></i> Check Now
                         </button>
                     </div>
-                    <div class="card-body">
-                        <div id="health-status" class="row">
-                            <div class="col-12 text-center text-muted">
-                                <i class="bi bi-hourglass-split"></i> Loading health status...
+                    <div class="health-section-body">
+                        <div id="health-status" class="row g-2">
+                            <div class="col-12 text-center" style="padding: 1rem;">
+                                <span class="loading-text"><i class="bi bi-hourglass-split"></i> Loading health status...</span>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- Filters Section -->
-        <div class="filter-section">
-            <div class="row g-3">
-                <div class="col-md-3">
-                    <label class="form-label"><i class="bi bi-funnel"></i> Source</label>
-                    <select id="filter-source" class="form-select">
-                        <option value="all">All Sources</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label"><i class="bi bi-search"></i> Keyword</label>
-                    <input type="text" id="filter-keyword" class="form-control" placeholder="Search in title/summary">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label"><i class="bi bi-clock-history"></i> Time Range</label>
-                    <select id="filter-days" class="form-select">
-                        <option value="">All Time</option>
-                        <option value="1">Last 24 Hours</option>
-                        <option value="7">Last 7 Days</option>
-                        <option value="30">Last 30 Days</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label"><i class="bi bi-list-ol"></i> Show</label>
-                    <div class="d-flex gap-2">
-                        <select id="filter-limit" class="form-select">
-                            <option value="20">20 articles</option>
-                            <option value="50" selected>50 articles</option>
-                            <option value="100">100 articles</option>
-                        </select>
-                        <button class="btn btn-primary" onclick="applyFilters()">
-                            <i class="bi bi-funnel-fill"></i> Filter
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Articles List -->
-        <div class="row">
-            <div class="col-12">
-                <div class="loading-spinner" id="loading-spinner">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p class="mt-2">Loading articles...</p>
-                </div>
-
-                <div id="articles-container">
-                    <!-- Articles will be loaded here -->
-                </div>
-
-                <!-- Pagination -->
-                <div id="pagination" class="d-flex justify-content-center mt-4">
-                    <!-- Pagination buttons will be added here -->
-                </div>
-            </div>
-        </div>
-
-            </div>
-            <!-- End Articles View -->
-
-            <!-- Clusters View -->
-            <div class="tab-pane fade" id="clusters-view" role="tabpanel">
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="alert alert-info">
-                            <i class="bi bi-info-circle"></i> Showing clusters from latest embeddings batch. Articles in the same cluster cover similar stories.
+                <!-- Filters Section -->
+                <div class="filter-bar">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label><i class="bi bi-funnel"></i> Source</label>
+                            <select id="filter-source" class="form-select-dark">
+                                <option value="all">All Sources</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label><i class="bi bi-search"></i> Keyword</label>
+                            <input type="text" id="filter-keyword" class="form-control-dark" placeholder="Search title or summary...">
+                        </div>
+                        <div class="col-md-2">
+                            <label><i class="bi bi-clock-history"></i> Time Range</label>
+                            <select id="filter-days" class="form-select-dark">
+                                <option value="">All Time</option>
+                                <option value="1">Last 24 Hours</option>
+                                <option value="7">Last 7 Days</option>
+                                <option value="30">Last 30 Days</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label><i class="bi bi-list-ol"></i> Show</label>
+                            <select id="filter-limit" class="form-select-dark">
+                                <option value="20">20 articles</option>
+                                <option value="50" selected>50 articles</option>
+                                <option value="100">100 articles</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn-filter w-100" onclick="applyFilters()">
+                                <i class="bi bi-funnel-fill"></i> Apply Filters
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                <div id="cluster-stats" class="row mb-4"></div>
+                <!-- Articles List -->
+                <div class="loading-area" id="loading-spinner">
+                    <div class="spinner-ring mx-auto"></div>
+                    <div class="loading-text">Loading articles...</div>
+                </div>
 
-                <div class="loading-spinner" id="cluster-loading-spinner">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
+                <div id="articles-container"></div>
+
+                <!-- Pagination -->
+                <div id="pagination" class="pagination-bar"></div>
+
+            </div>
+            <!-- End Articles View -->
+
+            <!-- ==================== CLUSTERS VIEW ==================== -->
+            <div class="tab-pane fade" id="clusters-view" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="alert-dark mb-0 flex-grow-1 me-3">
+                        <i class="bi bi-info-circle"></i>
+                        <span id="cluster-info-text">Showing clusters from the last 24 hours.</span> Articles in the same cluster cover similar stories, ranked by similarity to centroid.
                     </div>
-                    <p class="mt-2">Loading clusters...</p>
+                    <div class="flex-shrink-0">
+                        <label class="d-block" style="font-size: 0.75rem; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.35rem;">
+                            <i class="bi bi-clock-history"></i> Time Range
+                        </label>
+                        <select id="cluster-time-range" class="form-select-dark" onchange="onClusterTimeRangeChange()">
+                            <option value="24" selected>Last 24 hours</option>
+                            <option value="168">Last 7 days</option>
+                            <option value="720">Last 30 days</option>
+                            <option value="0">All time</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Similarity Range Filter -->
+                <div class="range-slider-container">
+                    <span class="range-slider-label"><i class="bi bi-sliders"></i> Avg Strength</span>
+                    <span class="range-value-display" id="range-min-display">50%</span>
+                    <div class="range-slider-wrap">
+                        <div class="range-slider-track"></div>
+                        <div class="range-slider-fill" id="range-fill"></div>
+                        <input type="range" id="range-min" min="50" max="100" value="50" step="1">
+                        <input type="range" id="range-max" min="50" max="100" value="100" step="1">
+                    </div>
+                    <span class="range-value-display" id="range-max-display">100%</span>
+                    <span style="font-size: 0.75rem; color: var(--text-muted); white-space: nowrap;" id="range-match-count"></span>
+                </div>
+
+                <div id="cluster-stats" class="stats-grid" style="grid-template-columns: repeat(3, 1fr);"></div>
+
+                <div class="loading-area" id="cluster-loading-spinner">
+                    <div class="spinner-ring mx-auto"></div>
+                    <div class="loading-text">Loading clusters...</div>
                 </div>
 
                 <div id="clusters-container"></div>
             </div>
             <!-- End Clusters View -->
 
-            <!-- Source Analytics View -->
+            <!-- ==================== ANALYTICS VIEW ==================== -->
             <div class="tab-pane fade" id="analytics-view" role="tabpanel">
-                <div class="row mb-4">
-                    <div class="col-12">
-                        <h4><i class="bi bi-pie-chart-fill"></i> Source Distribution Analysis</h4>
-                        <p class="text-muted">Breakdown of articles by source</p>
-                    </div>
-                </div>
+                <div class="analytics-heading"><i class="bi bi-pie-chart-fill"></i> Source Distribution Analysis</div>
+                <div class="analytics-subtitle">Breakdown of articles by ingestion source</div>
 
-                <div class="row">
+                <div class="row g-4">
                     <div class="col-md-6">
-                        <div class="card">
-                            <div class="card-header">
+                        <div class="chart-card">
+                            <div class="chart-card-header">
                                 <h5><i class="bi bi-collection"></i> Total Articles by Source</h5>
                             </div>
-                            <div class="card-body">
+                            <div class="chart-card-body">
                                 <div class="chart-container">
                                     <canvas id="total-chart"></canvas>
                                 </div>
@@ -297,11 +1220,11 @@
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <div class="card">
-                            <div class="card-header">
+                        <div class="chart-card">
+                            <div class="chart-card-header">
                                 <h5><i class="bi bi-calendar-day"></i> Last 24 Hours by Source</h5>
                             </div>
-                            <div class="card-body">
+                            <div class="chart-card-body">
                                 <div class="chart-container">
                                     <canvas id="daily-chart"></canvas>
                                 </div>
@@ -310,7 +1233,7 @@
                     </div>
                 </div>
             </div>
-            <!-- End Source Analytics View -->
+            <!-- End Analytics View -->
 
         </div>
         <!-- End Tab Content -->
@@ -341,7 +1264,7 @@
                     data.sources.forEach(source => {
                         const option = document.createElement('option');
                         option.value = source.name;
-                        option.textContent = `${source.name} (${source.count})`;
+                        option.textContent = `${source.name} (${source.count.toLocaleString()})`;
                         select.appendChild(option);
                     });
                 });
@@ -366,13 +1289,14 @@
 
                     // Update overall health badge
                     const badge = document.getElementById('overall-health');
-                    const statusClass = {
-                        'healthy': 'bg-success',
-                        'degraded': 'bg-warning',
-                        'warning': 'bg-warning',
-                        'error': 'bg-danger'
-                    }[data.overall] || 'bg-secondary';
-                    badge.className = `health-badge badge ${statusClass}`;
+                    const badgeClassMap = {
+                        'healthy': 'badge-health-healthy',
+                        'degraded': 'badge-health-degraded',
+                        'warning': 'badge-health-warning',
+                        'error': 'badge-health-error'
+                    };
+                    const badgeClass = badgeClassMap[data.overall] || 'badge-health-checking';
+                    badge.className = `health-badge-main ${badgeClass}`;
                     badge.innerHTML = `<i class="bi bi-activity"></i> ${data.overall.toUpperCase()}`;
 
                     // Count healthy services
@@ -383,28 +1307,18 @@
                     // Display each service status
                     Object.entries(data.services).forEach(([name, status]) => {
                         const col = document.createElement('div');
-                        col.className = 'col-md-4 mb-3';
+                        col.className = 'col-md-4 col-lg-4 mb-2';
 
-                        const statusClass = {
-                            'healthy': 'status-healthy',
-                            'warning': 'status-warning',
-                            'degraded': 'status-degraded',
-                            'error': 'status-error',
-                            'rate_limited': 'status-error',
-                            'unhealthy': 'status-error',
-                            'unconfigured': 'status-warning'
-                        }[status.status] || 'status-warning';
+                        const dotClass = status.status;
 
                         col.innerHTML = `
-                            <div class="card">
-                                <div class="card-body">
-                                    <h6 class="card-title">
-                                        <span class="health-status ${statusClass}"></span>
-                                        ${name.replace(/_/g, ' ').toUpperCase()}
-                                    </h6>
-                                    <p class="card-text small mb-1">${status.message}</p>
-                                    <small class="text-muted">${new Date(status.last_check).toLocaleTimeString()}</small>
+                            <div class="health-service-card">
+                                <div class="health-service-name">
+                                    <span class="health-dot ${dotClass}"></span>
+                                    ${name.replace(/_/g, ' ').toUpperCase()}
                                 </div>
+                                <div class="health-service-msg">${status.message}</div>
+                                <div class="health-service-time">${new Date(status.last_check).toLocaleTimeString()}</div>
                             </div>
                         `;
                         container.appendChild(col);
@@ -412,8 +1326,9 @@
                 })
                 .catch(err => {
                     console.error('Health check failed:', err);
-                    document.getElementById('overall-health').className = 'health-badge badge bg-danger';
-                    document.getElementById('overall-health').innerHTML = '<i class="bi bi-x-circle"></i> ERROR';
+                    const badge = document.getElementById('overall-health');
+                    badge.className = 'health-badge-main badge-health-error';
+                    badge.innerHTML = '<i class="bi bi-x-circle"></i> ERROR';
                 });
         }
 
@@ -446,7 +1361,7 @@
 
                     if (data.articles.length === 0) {
                         container.innerHTML = `
-                            <div class="alert alert-info">
+                            <div class="alert-dark">
                                 <i class="bi bi-info-circle"></i> No articles found matching your filters.
                             </div>
                         `;
@@ -464,7 +1379,7 @@
 
         function createArticleCard(article) {
             const card = document.createElement('div');
-            card.className = 'card article-card';
+            card.className = 'article-card';
 
             const publishedDate = article.published_at
                 ? new Date(article.published_at).toLocaleString()
@@ -478,36 +1393,32 @@
             let classificationBadge = '';
             if (article.classification_label) {
                 const label = article.classification_label;
-                let badgeClass = 'bg-secondary';
-                if (label === 'FACTUAL') badgeClass = 'bg-success';
-                else if (label === 'OPINION') badgeClass = 'bg-warning text-dark';
-                else if (label === 'SLOP') badgeClass = 'bg-danger';
+                let badgeClass = '';
+                if (label === 'FACTUAL') badgeClass = 'badge-factual';
+                else if (label === 'OPINION') badgeClass = 'badge-opinion';
+                else if (label === 'SLOP') badgeClass = 'badge-slop';
 
-                classificationBadge = `<span class="badge ${badgeClass} source-badge me-1">${label}</span>`;
+                classificationBadge = `<span class="${badgeClass}">${label}</span>`;
             }
 
             card.innerHTML = `
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                        <h5 class="card-title mb-0">
-                            <a href="${article.url}" target="_blank" class="text-decoration-none">
-                                ${article.title}
-                            </a>
-                        </h5>
-                        <div>
-                            ${classificationBadge}
-                            <span class="badge bg-primary source-badge">${article.source}</span>
-                        </div>
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <div class="article-title flex-grow-1 me-3">
+                        <a href="${article.url}" target="_blank">${article.title}</a>
                     </div>
-                    ${summary ? `<p class="card-text text-muted">${summary}</p>` : ''}
-                    <div class="d-flex justify-content-between align-items-center">
-                        <small class="text-muted">
-                            <i class="bi bi-clock"></i> ${publishedDate}
-                        </small>
-                        <a href="${article.url}" target="_blank" class="btn btn-sm btn-outline-primary">
-                            Read More <i class="bi bi-box-arrow-up-right"></i>
-                        </a>
+                    <div class="gap-badges flex-shrink-0">
+                        ${classificationBadge}
+                        <span class="badge-source">${article.source}</span>
                     </div>
+                </div>
+                ${summary ? `<div class="article-summary">${summary}</div>` : ''}
+                <div class="article-meta">
+                    <span class="article-timestamp">
+                        <i class="bi bi-clock"></i> ${publishedDate}
+                    </span>
+                    <a href="${article.url}" target="_blank" class="btn-read-more">
+                        Read <i class="bi bi-arrow-up-right"></i>
+                    </a>
                 </div>
             `;
 
@@ -526,7 +1437,7 @@
             // Previous button
             if (currentPage > 1) {
                 const prev = document.createElement('button');
-                prev.className = 'btn btn-outline-primary me-2';
+                prev.className = 'btn-page';
                 prev.innerHTML = '<i class="bi bi-chevron-left"></i> Previous';
                 prev.onclick = () => {
                     currentOffset -= currentLimit;
@@ -538,14 +1449,14 @@
 
             // Page info
             const info = document.createElement('span');
-            info.className = 'align-self-center mx-3';
-            info.textContent = `Page ${currentPage} of ${totalPages}`;
+            info.className = 'page-info';
+            info.textContent = `Page ${currentPage} of ${totalPages.toLocaleString()}`;
             pagination.appendChild(info);
 
             // Next button
             if (currentPage < totalPages) {
                 const next = document.createElement('button');
-                next.className = 'btn btn-outline-primary ms-2';
+                next.className = 'btn-page';
                 next.innerHTML = 'Next <i class="bi bi-chevron-right"></i>';
                 next.onclick = () => {
                     currentOffset += currentLimit;
@@ -576,130 +1487,233 @@
             });
         });
 
-        // Cluster viewing functionality
+        // ==================== CLUSTER VIEWING ====================
         let clustersLoaded = false;
+        let currentClusterHours = 24;
+        let allClusters = [];  // Store all fetched clusters for client-side filtering
+
+        // Range slider setup
+        (function initRangeSlider() {
+            document.addEventListener('DOMContentLoaded', function() {
+                const rangeMin = document.getElementById('range-min');
+                const rangeMax = document.getElementById('range-max');
+                if (!rangeMin || !rangeMax) return;
+
+                function updateSlider() {
+                    let minVal = parseInt(rangeMin.value);
+                    let maxVal = parseInt(rangeMax.value);
+
+                    // Prevent crossover
+                    if (minVal > maxVal) {
+                        if (this === rangeMin) { rangeMin.value = maxVal; minVal = maxVal; }
+                        else { rangeMax.value = minVal; maxVal = minVal; }
+                    }
+
+                    document.getElementById('range-min-display').textContent = minVal + '%';
+                    document.getElementById('range-max-display').textContent = maxVal + '%';
+
+                    // Update fill bar position
+                    const fill = document.getElementById('range-fill');
+                    const pctMin = ((minVal - 50) / 50) * 100;
+                    const pctMax = ((maxVal - 50) / 50) * 100;
+                    fill.style.left = pctMin + '%';
+                    fill.style.width = (pctMax - pctMin) + '%';
+
+                    // Filter clusters client-side
+                    filterClustersByRange(minVal / 100, maxVal / 100);
+                }
+
+                rangeMin.addEventListener('input', updateSlider);
+                rangeMax.addEventListener('input', updateSlider);
+
+                // Initialize fill
+                const fill = document.getElementById('range-fill');
+                fill.style.left = '0%';
+                fill.style.width = '100%';
+            });
+        })();
+
+        function filterClustersByRange(minSim, maxSim) {
+            if (!allClusters.length) return;
+
+            const filtered = allClusters.filter(c => c.avg_similarity >= minSim && c.avg_similarity <= maxSim);
+            document.getElementById('range-match-count').textContent = filtered.length + ' / ' + allClusters.length + ' clusters';
+            renderClusters(filtered);
+            updateClusterStats(filtered);
+        }
+
+        function onClusterTimeRangeChange() {
+            const hours = parseInt(document.getElementById('cluster-time-range').value);
+            currentClusterHours = hours;
+
+            // Update info text
+            const infoText = document.getElementById('cluster-info-text');
+            const labels = { 24: 'the last 24 hours', 168: 'the last 7 days', 720: 'the last 30 days', 0: 'all time' };
+            infoText.textContent = 'Showing clusters from ' + (labels[hours] || 'the last 24 hours') + '.';
+
+            // Force reload
+            clustersLoaded = false;
+            loadClusters();
+        }
+
+        function updateClusterStats(clusters) {
+            const statsDiv = document.getElementById('cluster-stats');
+            const totalClustered = clusters.reduce((sum, c) => sum + c.size, 0);
+            const avgSize = clusters.length > 0 ? (totalClustered / clusters.length).toFixed(1) : '0';
+
+            statsDiv.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-card-label">Total Clusters</div>
+                    <div class="stat-card-value" style="color: var(--accent-purple);">${clusters.length.toLocaleString()}</div>
+                    <i class="bi bi-diagram-3 stat-card-icon"></i>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-label">Clustered Articles</div>
+                    <div class="stat-card-value" style="color: var(--accent-blue);">${totalClustered.toLocaleString()}</div>
+                    <i class="bi bi-files stat-card-icon"></i>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-label">Avg Cluster Size</div>
+                    <div class="stat-card-value" style="color: var(--accent-green);">${avgSize}</div>
+                    <i class="bi bi-bar-chart stat-card-icon"></i>
+                </div>
+            `;
+        }
+
+        function renderClusters(clusters) {
+            const container = document.getElementById('clusters-container');
+            container.innerHTML = '';
+
+            if (clusters.length === 0) {
+                container.innerHTML = `
+                    <div class="alert-dark-warning">
+                        <i class="bi bi-exclamation-triangle"></i> No clusters match the selected strength range.
+                    </div>
+                `;
+                return;
+            }
+
+            clusters.forEach((cluster) => {
+                const clusterCard = document.createElement('div');
+                clusterCard.className = 'cluster-card';
+
+                let articlesHtml = cluster.articles.map((article) => {
+                    const centroidClass = article.is_centroid ? 'centroid' : '';
+                    const centroidBadge = article.is_centroid ? '<span class="badge-centroid ms-2">Centroid</span>' : '';
+                    const publishedDate = article.published_at
+                        ? new Date(article.published_at).toLocaleString()
+                        : 'Unknown';
+
+                    let similarityClass = 'high';
+                    if (article.similarity < 0.7) similarityClass = 'medium';
+                    if (article.similarity < 0.6) similarityClass = 'low';
+
+                    return `
+                        <div class="cluster-article-item ${centroidClass}">
+                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                <div class="flex-grow-1">
+                                    <span class="badge-similarity ${similarityClass} me-1">${(article.similarity * 100).toFixed(1)}%</span>
+                                    <a href="${article.url}" target="_blank" class="article-link">${article.title}</a>
+                                    ${centroidBadge}
+                                </div>
+                                <span class="badge-source ms-2">${article.source}</span>
+                            </div>
+                            <span class="article-timestamp"><i class="bi bi-clock"></i> ${publishedDate}</span>
+                        </div>
+                    `;
+                }).join('');
+
+                let avgSimBg, avgSimColor, avgSimBorder;
+                if (cluster.avg_similarity >= 0.7) {
+                    avgSimBg = 'var(--accent-green-dim)';
+                    avgSimColor = 'var(--accent-green)';
+                    avgSimBorder = 'rgba(63, 185, 80, 0.2)';
+                } else if (cluster.avg_similarity >= 0.6) {
+                    avgSimBg = 'var(--accent-yellow-dim)';
+                    avgSimColor = 'var(--accent-yellow)';
+                    avgSimBorder = 'rgba(210, 153, 34, 0.2)';
+                } else {
+                    avgSimBg = 'var(--accent-red-dim)';
+                    avgSimColor = 'var(--accent-red)';
+                    avgSimBorder = 'rgba(248, 81, 73, 0.2)';
+                }
+
+                clusterCard.innerHTML = `
+                    <div class="cluster-card-header">
+                        <h5>
+                            <i class="bi bi-diagram-3-fill" style="color: var(--accent-purple);"></i>
+                            Cluster #${cluster.cluster_label}
+                            <span class="badge-cluster-size">${cluster.size} articles</span>
+                            <span class="badge-avg-similarity" style="background:${avgSimBg}; color:${avgSimColor}; border: 1px solid ${avgSimBorder};">Avg: ${(cluster.avg_similarity * 100).toFixed(1)}%</span>
+                        </h5>
+                    </div>
+                    <div class="cluster-card-body">
+                        <div class="note-text">
+                            <i class="bi bi-info-circle"></i> Articles ranked by correlation to centroid (highest to lowest)
+                        </div>
+                        ${articlesHtml}
+                    </div>
+                `;
+
+                container.appendChild(clusterCard);
+            });
+        }
 
         function loadClusters() {
-            if (clustersLoaded) return; // Only load once
+            if (clustersLoaded) return;
 
             document.getElementById('cluster-loading-spinner').style.display = 'block';
             document.getElementById('clusters-container').innerHTML = '';
 
-            fetch('/api/clusters')
+            const params = new URLSearchParams({ hours: currentClusterHours });
+            fetch(`/api/clusters?${params}`)
                 .then(res => res.json())
                 .then(data => {
                     document.getElementById('cluster-loading-spinner').style.display = 'none';
                     clustersLoaded = true;
+                    allClusters = data.clusters;
 
-                    // Show stats
-                    const statsDiv = document.getElementById('cluster-stats');
-                    statsDiv.innerHTML = `
-                        <div class="col-md-4">
-                            <div class="stats-card">
-                                <h3>${data.total_clusters}</h3>
-                                <p>Total Clusters</p>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="stats-card">
-                                <h3>${data.clusters.reduce((sum, c) => sum + c.size, 0)}</h3>
-                                <p>Clustered Articles</p>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="stats-card">
-                                <h3>${(data.clusters.reduce((sum, c) => sum + c.size, 0) / data.total_clusters).toFixed(1)}</h3>
-                                <p>Avg Cluster Size</p>
-                            </div>
-                        </div>
-                    `;
+                    // Apply current range filter
+                    const minVal = parseInt(document.getElementById('range-min').value);
+                    const maxVal = parseInt(document.getElementById('range-max').value);
+                    const filtered = allClusters.filter(c => c.avg_similarity >= minVal / 100 && c.avg_similarity <= maxVal / 100);
 
-                    const container = document.getElementById('clusters-container');
+                    document.getElementById('range-match-count').textContent = filtered.length + ' / ' + allClusters.length + ' clusters';
+                    updateClusterStats(filtered);
 
                     if (data.clusters.length === 0) {
-                        container.innerHTML = `
-                            <div class="alert alert-warning">
-                                <i class="bi bi-exclamation-triangle"></i> ${data.message || 'No clusters found'}
+                        document.getElementById('clusters-container').innerHTML = `
+                            <div class="alert-dark-warning">
+                                <i class="bi bi-exclamation-triangle"></i> ${data.message || 'No clusters found for this time range.'}
                             </div>
                         `;
                         return;
                     }
 
-                    data.clusters.forEach((cluster, idx) => {
-                        const clusterCard = document.createElement('div');
-                        clusterCard.className = 'card cluster-card';
-
-                        let articlesHtml = cluster.articles.map((article, articleIdx) => {
-                            const centroidClass = article.is_centroid ? 'centroid' : '';
-                            const centroidBadge = article.is_centroid ? '<span class="badge bg-success ms-2">CENTROID</span>' : '';
-                            const publishedDate = article.published_at
-                                ? new Date(article.published_at).toLocaleString()
-                                : 'Unknown';
-
-                            // Color-code similarity score
-                            let similarityClass = 'bg-success';
-                            if (article.similarity < 0.7) similarityClass = 'bg-warning';
-                            if (article.similarity < 0.6) similarityClass = 'bg-danger';
-
-                            return `
-                                <div class="cluster-article ${centroidClass}">
-                                    <div class="d-flex justify-content-between align-items-start mb-1">
-                                        <div class="flex-grow-1">
-                                            <span class="badge ${similarityClass} me-2" style="font-size: 0.7rem;">${(article.similarity * 100).toFixed(1)}%</span>
-                                            <a href="${article.url}" target="_blank" class="text-decoration-none">
-                                                ${article.title}
-                                            </a>
-                                            ${centroidBadge}
-                                        </div>
-                                        <span class="badge bg-primary source-badge ms-2">${article.source}</span>
-                                    </div>
-                                    <small class="text-muted"><i class="bi bi-clock"></i> ${publishedDate}</small>
-                                </div>
-                            `;
-                        }).join('');
-
-                        // Color-code average similarity
-                        let avgSimClass = 'bg-success';
-                        if (cluster.avg_similarity < 0.7) avgSimClass = 'bg-warning';
-                        if (cluster.avg_similarity < 0.6) avgSimClass = 'bg-danger';
-
-                        clusterCard.innerHTML = `
-                            <div class="card-header">
-                                <h5 class="mb-0">
-                                    <i class="bi bi-diagram-3-fill"></i> Cluster #${cluster.cluster_label}
-                                    <span class="badge bg-secondary ms-2">${cluster.size} articles</span>
-                                    <span class="badge ${avgSimClass} ms-2">Avg: ${(cluster.avg_similarity * 100).toFixed(1)}%</span>
-                                </h5>
-                            </div>
-                            <div class="card-body">
-                                <small class="text-muted mb-2 d-block">
-                                    <i class="bi bi-info-circle"></i> Articles ranked by correlation to centroid (highest to lowest)
-                                </small>
-                                ${articlesHtml}
-                            </div>
-                        `;
-
-                        container.appendChild(clusterCard);
-                    });
+                    renderClusters(filtered);
                 })
                 .catch(err => {
                     console.error('Failed to load clusters:', err);
                     document.getElementById('cluster-loading-spinner').style.display = 'none';
                     document.getElementById('clusters-container').innerHTML = `
-                        <div class="alert alert-danger">
+                        <div class="alert-dark-danger">
                             <i class="bi bi-x-circle"></i> Error loading clusters: ${err.message}
                         </div>
                     `;
                 });
         }
 
-        // Source analytics functionality
+        // ==================== SOURCE ANALYTICS ====================
         let chartsLoaded = false;
         let totalChart = null;
         let dailyChart = null;
 
+        // Chart.js global dark theme defaults
+        Chart.defaults.color = '#8b949e';
+        Chart.defaults.borderColor = '#30363d';
+
         function loadSourceBreakdown() {
-            if (chartsLoaded) return; // Only load once
+            if (chartsLoaded) return;
 
             fetch('/api/source-breakdown')
                 .then(res => res.json())
@@ -709,27 +1723,68 @@
                     // Generate colors
                     const colors = generateColors(Math.max(data.total.length, data.daily.length));
 
+                    const chartOptions = {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    color: '#8b949e',
+                                    font: {
+                                        family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                                        size: 11
+                                    },
+                                    padding: 12,
+                                    usePointStyle: true,
+                                    pointStyleWidth: 10
+                                }
+                            },
+                            title: {
+                                display: false
+                            },
+                            tooltip: {
+                                backgroundColor: '#1c2333',
+                                titleColor: '#e6edf3',
+                                bodyColor: '#8b949e',
+                                borderColor: '#30363d',
+                                borderWidth: 1,
+                                cornerRadius: 8,
+                                padding: 10,
+                                titleFont: {
+                                    weight: 600
+                                },
+                                bodyFont: {
+                                    family: "'JetBrains Mono', 'SF Mono', Consolas, monospace"
+                                }
+                            }
+                        }
+                    };
+
                     // Total chart
                     const totalCtx = document.getElementById('total-chart').getContext('2d');
                     totalChart = new Chart(totalCtx, {
-                        type: 'pie',
+                        type: 'doughnut',
                         data: {
                             labels: data.total.map(s => s.source),
                             datasets: [{
                                 data: data.total.map(s => s.count),
-                                backgroundColor: colors
+                                backgroundColor: colors,
+                                borderColor: '#161b22',
+                                borderWidth: 2,
+                                hoverBorderColor: '#e6edf3',
+                                hoverBorderWidth: 2
                             }]
                         },
                         options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
+                            ...chartOptions,
+                            cutout: '55%',
                             plugins: {
+                                ...chartOptions.plugins,
                                 legend: {
-                                    position: 'right',
+                                    ...chartOptions.plugins.legend,
                                     labels: {
-                                        font: {
-                                            size: 11
-                                        },
+                                        ...chartOptions.plugins.legend.labels,
                                         generateLabels: function(chart) {
                                             const data = chart.data;
                                             const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
@@ -737,16 +1792,15 @@
                                                 const value = data.datasets[0].data[i];
                                                 const percentage = ((value / total) * 100).toFixed(1);
                                                 return {
-                                                    text: `${label}: ${value} (${percentage}%)`,
+                                                    text: `${label}: ${value.toLocaleString()} (${percentage}%)`,
                                                     fillStyle: data.datasets[0].backgroundColor[i],
-                                                    index: i
+                                                    strokeStyle: 'transparent',
+                                                    index: i,
+                                                    pointStyle: 'circle'
                                                 };
                                             });
                                         }
                                     }
-                                },
-                                title: {
-                                    display: false
                                 }
                             }
                         }
@@ -755,24 +1809,27 @@
                     // Daily chart
                     const dailyCtx = document.getElementById('daily-chart').getContext('2d');
                     dailyChart = new Chart(dailyCtx, {
-                        type: 'pie',
+                        type: 'doughnut',
                         data: {
                             labels: data.daily.map(s => s.source),
                             datasets: [{
                                 data: data.daily.map(s => s.count),
-                                backgroundColor: colors
+                                backgroundColor: colors,
+                                borderColor: '#161b22',
+                                borderWidth: 2,
+                                hoverBorderColor: '#e6edf3',
+                                hoverBorderWidth: 2
                             }]
                         },
                         options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
+                            ...chartOptions,
+                            cutout: '55%',
                             plugins: {
+                                ...chartOptions.plugins,
                                 legend: {
-                                    position: 'right',
+                                    ...chartOptions.plugins.legend,
                                     labels: {
-                                        font: {
-                                            size: 11
-                                        },
+                                        ...chartOptions.plugins.legend.labels,
                                         generateLabels: function(chart) {
                                             const data = chart.data;
                                             const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
@@ -780,16 +1837,15 @@
                                                 const value = data.datasets[0].data[i];
                                                 const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
                                                 return {
-                                                    text: `${label}: ${value} (${percentage}%)`,
+                                                    text: `${label}: ${value.toLocaleString()} (${percentage}%)`,
                                                     fillStyle: data.datasets[0].backgroundColor[i],
-                                                    index: i
+                                                    strokeStyle: 'transparent',
+                                                    index: i,
+                                                    pointStyle: 'circle'
                                                 };
                                             });
                                         }
                                     }
-                                },
-                                title: {
-                                    display: false
                                 }
                             }
                         }
@@ -801,11 +1857,23 @@
         }
 
         function generateColors(count) {
-            // Generate visually distinct colors
+            // Dark-theme optimized palette: vibrant but not blinding
             const baseColors = [
-                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
-                '#FF9F40', '#FF6384', '#C9CBCF', '#4BC0C0', '#FF6384',
-                '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'
+                '#388bfd',  // Blue
+                '#3fb950',  // Green
+                '#a371f7',  // Purple
+                '#d29922',  // Yellow
+                '#f85149',  // Red
+                '#db6d28',  // Orange
+                '#39d353',  // Bright green
+                '#58a6ff',  // Light blue
+                '#bc8cff',  // Light purple
+                '#e3b341',  // Gold
+                '#f78166',  // Salmon
+                '#56d364',  // Lime
+                '#79c0ff',  // Sky
+                '#d2a8ff',  // Lavender
+                '#ffa657',  // Peach
             ];
 
             if (count <= baseColors.length) {
@@ -815,8 +1883,8 @@
             // Generate additional colors if needed
             const colors = [...baseColors];
             for (let i = baseColors.length; i < count; i++) {
-                const hue = (i * 137.5) % 360; // Golden angle approximation
-                colors.push(`hsl(${hue}, 70%, 60%)`);
+                const hue = (i * 137.5) % 360;
+                colors.push(`hsl(${hue}, 65%, 55%)`);
             }
             return colors;
         }

@@ -163,15 +163,28 @@ def get_stats():
 @app.route('/api/clusters')
 def get_clusters():
     """
-    Get ALL cluster results across all batches.
+    Get cluster results, optionally filtered by recency.
 
-    Returns clusters with their articles, sorted by size.
+    Query params:
+        hours: Only show clusters created within the last N hours (default: 24).
+               Use 0 or omit for all time.
+
+    Returns clusters with their articles, sorted by similarity.
     """
+    hours = request.args.get('hours', 24, type=int)
+
     with db_manager.get_connection() as conn:
         with conn.cursor() as cur:
-            # Get cluster data with correlation scores from ALL batches
+            # Build optional time filter on article_clusters.created_at
+            time_filter = ""
+            params = []
+            if hours and hours > 0:
+                time_filter = "AND ac.created_at >= NOW() - INTERVAL '%s hours'"
+                params = [hours]
+
+            # Get cluster data with correlation scores
             # Note: distance_to_centroid is stored as (1 - similarity), so similarity = 1 - distance
-            cur.execute("""
+            query = """
                 WITH cluster_info AS (
                     SELECT
                         ac.cluster_batch_id,
@@ -188,13 +201,16 @@ def get_clusters():
                     JOIN articles_raw a ON ac.article_id = a.id
                     WHERE ac.clustering_method = 'embeddings'
                         AND ac.cluster_label <> -1
+                        {time_filter}
                     GROUP BY ac.cluster_batch_id, ac.cluster_label
                     HAVING COUNT(*) >= 2
                 )
                 SELECT * FROM cluster_info
                 WHERE avg_similarity < 0.999
                 ORDER BY avg_similarity DESC, size DESC
-            """)
+            """.format(time_filter=time_filter)
+
+            cur.execute(query, params)
 
             clusters = cur.fetchall()
 

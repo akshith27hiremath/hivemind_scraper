@@ -28,7 +28,7 @@ from logger import setup_logger
 logger = setup_logger(__name__)
 
 # Window size for clustering (articles within this window can be clustered together)
-WINDOW_HOURS = 36
+WINDOW_HOURS = 48
 # Similarity threshold for matching to existing centroids
 SIMILARITY_THRESHOLD = 0.5
 
@@ -70,6 +70,9 @@ def run_incremental_clustering(lookback_hours: int = 6, dry_run: bool = False):
         similarity_threshold=SIMILARITY_THRESHOLD
     )
 
+    # Single noise batch_id for this entire run (not one per group)
+    noise_batch_id = str(uuid.uuid4())
+
     # Get recently classified but unclustered FACTUAL articles
     cutoff_time = datetime.now() - timedelta(hours=lookback_hours)
 
@@ -107,10 +110,9 @@ def run_incremental_clustering(lookback_hours: int = 6, dry_run: bool = False):
     # Group articles by their publication window
     window_groups = defaultdict(list)
     for article in new_articles:
-        # Use a normalized window start (rounded to nearest 12 hours for grouping)
+        # Use a normalized window start (rounded to calendar day for grouping)
         window_start = article['published_at'].replace(
-            hour=(article['published_at'].hour // 12) * 12,
-            minute=0, second=0, microsecond=0
+            hour=0, minute=0, second=0, microsecond=0
         )
         window_groups[window_start].append(article)
 
@@ -131,14 +133,13 @@ def run_incremental_clustering(lookback_hours: int = 6, dry_run: bool = False):
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT
-                        a.id, a.title, a.summary,
-                        ar.cluster_batch_id, ar.cluster_label
-                    FROM articles_raw ar
-                    JOIN articles_raw a ON ar.id = a.id
-                    WHERE ar.is_cluster_centroid = TRUE
-                      AND ar.published_at >= %s
-                      AND ar.published_at < %s
-                      AND ar.cluster_label != -1
+                        id, title, summary,
+                        cluster_batch_id, cluster_label
+                    FROM articles_raw
+                    WHERE is_cluster_centroid = TRUE
+                      AND published_at >= %s
+                      AND published_at < %s
+                      AND cluster_label != -1
                 """, (window_start, window_end))
 
                 existing_centroids = []
@@ -178,7 +179,7 @@ def run_incremental_clustering(lookback_hours: int = 6, dry_run: bool = False):
             elif unmatched:
                 # Single unmatched article - mark as noise
                 if not dry_run:
-                    mark_as_noise(db, unmatched)
+                    mark_as_noise(db, unmatched, noise_batch_id)
                 total_noise += len(unmatched)
         else:
             # No existing centroids - cluster all new articles
@@ -197,7 +198,7 @@ def run_incremental_clustering(lookback_hours: int = 6, dry_run: bool = False):
             elif window_articles:
                 # Single article - mark as noise
                 if not dry_run:
-                    mark_as_noise(db, window_articles)
+                    mark_as_noise(db, window_articles, noise_batch_id)
                 total_noise += len(window_articles)
 
     # Summary
@@ -228,8 +229,8 @@ def match_to_centroids(articles, centroids, clusterer):
         return [], articles
 
     # Generate embeddings for new articles and centroids
-    article_texts = [f"{a['title']} {a['summary']}" for a in articles]
-    centroid_texts = [f"{c['title']} {c['summary']}" for c in centroids]
+    article_texts = [a['title'] for a in articles]
+    centroid_texts = [c['title'] for c in centroids]
 
     # Load model if not already loaded
     if clusterer.model is None:
@@ -321,9 +322,8 @@ def save_cluster_updates(db, result):
     db.batch_update_cluster_status(cluster_updates)
 
 
-def mark_as_noise(db, articles):
+def mark_as_noise(db, articles, batch_id):
     """Mark articles as noise (no cluster match)."""
-    batch_id = str(uuid.uuid4())
 
     with db.get_connection() as conn:
         with conn.cursor() as cur:
