@@ -321,14 +321,24 @@
         }
 
         .health-section-body {
-            padding: 1rem 1.25rem;
+            padding: 0.75rem 1rem;
+        }
+
+        .health-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 0.5rem;
+        }
+
+        .health-grid-item {
+            min-width: 0;
         }
 
         .health-service-card {
             background: var(--bg-tertiary);
             border: 1px solid var(--border-subtle);
             border-radius: var(--radius-md);
-            padding: 0.85rem 1rem;
+            padding: 0.5rem 0.65rem;
             transition: border-color var(--transition-fast);
         }
 
@@ -337,13 +347,16 @@
         }
 
         .health-service-name {
-            font-size: 0.8rem;
+            font-size: 0.72rem;
             font-weight: 600;
             color: var(--text-primary);
             display: flex;
             align-items: center;
-            gap: 0.45rem;
-            margin-bottom: 0.35rem;
+            gap: 0.35rem;
+            margin-bottom: 0.2rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .health-dot {
@@ -372,13 +385,16 @@
         }
 
         .health-service-msg {
-            font-size: 0.75rem;
+            font-size: 0.68rem;
             color: var(--text-secondary);
-            margin-bottom: 0.15rem;
+            margin-bottom: 0.1rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .health-service-time {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             font-family: var(--font-mono);
             color: var(--text-muted);
         }
@@ -408,6 +424,18 @@
             border-radius: var(--radius-lg);
             padding: 1.25rem;
             margin-bottom: 1.5rem;
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 0.75rem;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .filter-col {
+            display: flex;
+            flex-direction: column;
         }
 
         .filter-bar label {
@@ -1237,8 +1265,8 @@
                         </button>
                     </div>
                     <div class="health-section-body">
-                        <div id="health-status" class="row g-2">
-                            <div class="col-12 text-center" style="padding: 1rem;">
+                        <div id="health-status" class="health-grid">
+                            <div style="grid-column: 1 / -1; text-align: center; padding: 0.75rem;">
                                 <span class="loading-text"><i class="bi bi-hourglass-split"></i> Loading health status...</span>
                             </div>
                         </div>
@@ -1247,42 +1275,14 @@
 
                 <!-- Filters Section -->
                 <div class="filter-bar">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-2">
+                    <div class="filter-row">
+                        <div class="filter-col" style="flex: 2; min-width: 140px;">
                             <label><i class="bi bi-funnel"></i> Source</label>
                             <select id="filter-source" class="form-select-dark">
                                 <option value="all">All Sources</option>
                             </select>
                         </div>
-                        <div class="col-md-2">
-                            <label><i class="bi bi-search"></i> Keyword</label>
-                            <input type="text" id="filter-keyword" class="form-control-dark" placeholder="Search title or summary...">
-                        </div>
-                        <div class="col-md-2">
-                            <label><i class="bi bi-clock-history"></i> Time Range</label>
-                            <select id="filter-days" class="form-select-dark">
-                                <option value="">All Time</option>
-                                <option value="1">Last 24 Hours</option>
-                                <option value="7">Last 7 Days</option>
-                                <option value="30">Last 30 Days</option>
-                            </select>
-                        </div>
-                        <div class="col-md-1">
-                            <label><i class="bi bi-list-ol"></i> Show</label>
-                            <select id="filter-limit" class="form-select-dark">
-                                <option value="20">20</option>
-                                <option value="50" selected>50</option>
-                                <option value="100">100</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <button class="btn-filter w-100" onclick="applyFilters()">
-                                <i class="bi bi-funnel-fill"></i> Apply
-                            </button>
-                        </div>
-                    </div>
-                    <div class="row g-3 mt-0">
-                        <div class="col-md-3">
+                        <div class="filter-col" style="flex: 2.5; min-width: 160px;">
                             <label><i class="bi bi-building"></i> Company</label>
                             <div class="ticker-filter-container">
                                 <input type="text" id="ticker-search" class="ticker-search-input"
@@ -1292,9 +1292,35 @@
                                        oninput="filterTickerDropdown()">
                                 <div id="ticker-dropdown" class="ticker-dropdown"></div>
                             </div>
-                            <div id="selected-tickers" class="selected-tickers"></div>
+                        </div>
+                        <div class="filter-col" style="flex: 2; min-width: 140px;">
+                            <label><i class="bi bi-search"></i> Keyword</label>
+                            <input type="text" id="filter-keyword" class="form-control-dark" placeholder="Search...">
+                        </div>
+                        <div class="filter-col" style="flex: 1.5; min-width: 120px;">
+                            <label><i class="bi bi-clock-history"></i> Time Range</label>
+                            <select id="filter-days" class="form-select-dark">
+                                <option value="">All Time</option>
+                                <option value="1">Last 24 Hours</option>
+                                <option value="7">Last 7 Days</option>
+                                <option value="30">Last 30 Days</option>
+                            </select>
+                        </div>
+                        <div class="filter-col" style="flex: 0.8; min-width: 70px;">
+                            <label><i class="bi bi-list-ol"></i> Show</label>
+                            <select id="filter-limit" class="form-select-dark">
+                                <option value="20">20</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                        <div class="filter-col" style="flex: 1; min-width: 90px; align-self: flex-end;">
+                            <button class="btn-filter w-100" onclick="applyFilters()">
+                                <i class="bi bi-funnel-fill"></i> Apply
+                            </button>
                         </div>
                     </div>
+                    <div id="selected-tickers" class="selected-tickers"></div>
                 </div>
 
                 <!-- Articles List -->
@@ -1524,7 +1550,7 @@
                     // Display each service status
                     Object.entries(data.services).forEach(([name, status]) => {
                         const col = document.createElement('div');
-                        col.className = 'col-md-4 col-lg-4 mb-2';
+                        col.className = 'health-grid-item';
 
                         const dotClass = status.status;
 
@@ -2058,6 +2084,7 @@
                                                 return {
                                                     text: `${label}: ${value.toLocaleString()} (${percentage}%)`,
                                                     fillStyle: data.datasets[0].backgroundColor[i],
+                                                    fontColor: '#e6edf3',
                                                     strokeStyle: 'transparent',
                                                     index: i,
                                                     pointStyle: 'circle'
@@ -2103,6 +2130,7 @@
                                                 return {
                                                     text: `${label}: ${value.toLocaleString()} (${percentage}%)`,
                                                     fillStyle: data.datasets[0].backgroundColor[i],
+                                                    fontColor: '#e6edf3',
                                                     strokeStyle: 'transparent',
                                                     index: i,
                                                     pointStyle: 'circle'
