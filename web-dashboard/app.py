@@ -194,15 +194,24 @@ def get_stats():
 @app.route('/api/clusters')
 def get_clusters():
     """
-    Get cluster results, optionally filtered by recency.
+    Get paginated cluster results, optionally filtered by recency and similarity.
 
     Query params:
         hours: Only show clusters created within the last N hours (default: 24).
                Use 0 or omit for all time.
+        page: Page number (default: 1)
+        per_page: Clusters per page (default: 20, max: 100)
+        min_similarity: Minimum avg similarity 0.0-1.0 (default: 0.5)
+        max_similarity: Maximum avg similarity 0.0-1.0 (default: 1.0)
 
-    Returns clusters with their articles, sorted by similarity.
+    Returns paginated clusters with their articles, sorted by similarity.
     """
     hours = request.args.get('hours', 24, type=int)
+    page = max(1, request.args.get('page', 1, type=int))
+    per_page = min(100, max(1, request.args.get('per_page', 20, type=int)))
+    min_similarity = request.args.get('min_similarity', 0.5, type=float)
+    max_similarity = request.args.get('max_similarity', 1.0, type=float)
+    offset = (page - 1) * per_page
 
     with db_manager.get_connection() as conn:
         with conn.cursor() as cur:
@@ -213,65 +222,132 @@ def get_clusters():
                 time_filter = "AND ac.created_at >= NOW() - INTERVAL '%s hours'"
                 params = [hours]
 
-            # Get cluster data with correlation scores
-            # Note: distance_to_centroid is stored as (1 - similarity), so similarity = 1 - distance
-            query = """
+            # Base CTE for cluster aggregation
+            base_cte = """
                 WITH cluster_info AS (
                     SELECT
                         ac.cluster_batch_id,
                         ac.cluster_label,
                         COUNT(*) as size,
-                        ARRAY_AGG(a.title ORDER BY ac.distance_to_centroid ASC NULLS LAST) as titles,
-                        ARRAY_AGG(a.url ORDER BY ac.distance_to_centroid ASC NULLS LAST) as urls,
-                        ARRAY_AGG(a.source ORDER BY ac.distance_to_centroid ASC NULLS LAST) as sources,
-                        ARRAY_AGG(ac.is_centroid ORDER BY ac.distance_to_centroid ASC NULLS LAST) as centroids,
-                        ARRAY_AGG(a.published_at ORDER BY ac.distance_to_centroid ASC NULLS LAST) as published_dates,
-                        ARRAY_AGG(COALESCE(1.0 - ac.distance_to_centroid, 1.0) ORDER BY ac.distance_to_centroid ASC NULLS LAST) as similarities,
                         AVG(COALESCE(1.0 - ac.distance_to_centroid, 1.0)) as avg_similarity
                     FROM article_clusters ac
-                    JOIN articles_raw a ON ac.article_id = a.id
                     WHERE ac.clustering_method = 'embeddings'
                         AND ac.cluster_label <> -1
                         {time_filter}
                     GROUP BY ac.cluster_batch_id, ac.cluster_label
                     HAVING COUNT(*) >= 2
+                ),
+                filtered AS (
+                    SELECT * FROM cluster_info
+                    WHERE avg_similarity < 0.999
+                        AND avg_similarity >= %s
+                        AND avg_similarity <= %s
                 )
-                SELECT * FROM cluster_info
-                WHERE avg_similarity < 0.999
-                ORDER BY avg_similarity DESC, size DESC
             """.format(time_filter=time_filter)
 
-            cur.execute(query, params)
+            sim_params = params + [min_similarity, max_similarity]
 
-            clusters = cur.fetchall()
+            # Get total count and aggregate stats
+            count_query = base_cte + """
+                SELECT COUNT(*),
+                       COALESCE(SUM(size), 0),
+                       COALESCE(AVG(size), 0)
+                FROM filtered
+            """
+            cur.execute(count_query, sim_params)
+            total_clusters, total_articles, avg_size = cur.fetchone()
+            total_clusters = int(total_clusters)
+            total_articles = int(total_articles)
 
-    # Format clusters
-    formatted_clusters = []
-    for cluster in clusters:
-        batch_id, label, size, titles, urls, sources, centroids, dates, similarities, avg_similarity = cluster
+            # Get paginated cluster IDs
+            page_query = base_cte + """
+                SELECT cluster_batch_id, cluster_label
+                FROM filtered
+                ORDER BY avg_similarity DESC, size DESC
+                LIMIT %s OFFSET %s
+            """
+            cur.execute(page_query, sim_params + [per_page, offset])
+            page_keys = cur.fetchall()
 
-        articles = []
-        for i in range(len(titles)):
-            articles.append({
-                'title': titles[i],
-                'url': urls[i],
-                'source': sources[i],
-                'is_centroid': centroids[i],
-                'published_at': dates[i].isoformat() if dates[i] else None,
-                'similarity': round(float(similarities[i]), 3)
+            if not page_keys:
+                return jsonify({
+                    'clusters': [],
+                    'total_clusters': total_clusters,
+                    'total_articles': total_articles,
+                    'avg_size': round(float(avg_size), 1),
+                    'page': page,
+                    'per_page': per_page,
+                    'total_pages': 0
+                })
+
+            # Fetch full article data only for this page's clusters
+            key_pairs = [(str(k[0]), k[1]) for k in page_keys]
+            placeholders = ', '.join(['(%s, %s)'] * len(key_pairs))
+            flat_keys = [v for pair in key_pairs for v in pair]
+
+            detail_query = """
+                SELECT
+                    ac.cluster_batch_id,
+                    ac.cluster_label,
+                    a.title,
+                    a.url,
+                    a.source,
+                    ac.is_centroid,
+                    a.published_at,
+                    COALESCE(1.0 - ac.distance_to_centroid, 1.0) as similarity
+                FROM article_clusters ac
+                JOIN articles_raw a ON ac.article_id = a.id
+                WHERE (ac.cluster_batch_id, ac.cluster_label) IN ({placeholders})
+                ORDER BY ac.cluster_batch_id, ac.cluster_label, ac.distance_to_centroid ASC NULLS LAST
+            """.format(placeholders=placeholders)
+
+            cur.execute(detail_query, flat_keys)
+            rows = cur.fetchall()
+
+    # Group rows into clusters, preserving page order
+    from collections import OrderedDict
+    cluster_map = OrderedDict()
+    for batch_id, label in page_keys:
+        cluster_map[(str(batch_id), label)] = {
+            'articles': [],
+            'similarities': []
+        }
+
+    for row in rows:
+        batch_id, label, title, url, source, is_centroid, published_at, similarity = row
+        key = (str(batch_id), label)
+        if key in cluster_map:
+            cluster_map[key]['articles'].append({
+                'title': title,
+                'url': url,
+                'source': source,
+                'is_centroid': is_centroid,
+                'published_at': published_at.isoformat() if published_at else None,
+                'similarity': round(float(similarity), 3)
             })
+            cluster_map[key]['similarities'].append(float(similarity))
 
+    formatted_clusters = []
+    for (batch_id, label), data in cluster_map.items():
+        avg_sim = sum(data['similarities']) / len(data['similarities']) if data['similarities'] else 0
         formatted_clusters.append({
-            'batch_id': str(batch_id),
+            'batch_id': batch_id,
             'cluster_label': label,
-            'size': size,
-            'avg_similarity': round(float(avg_similarity), 3),
-            'articles': articles
+            'size': len(data['articles']),
+            'avg_similarity': round(avg_sim, 3),
+            'articles': data['articles']
         })
+
+    total_pages = (total_clusters + per_page - 1) // per_page
 
     return jsonify({
         'clusters': formatted_clusters,
-        'total_clusters': len(formatted_clusters)
+        'total_clusters': total_clusters,
+        'total_articles': total_articles,
+        'avg_size': round(float(avg_size), 1),
+        'page': page,
+        'per_page': per_page,
+        'total_pages': total_pages
     })
 
 

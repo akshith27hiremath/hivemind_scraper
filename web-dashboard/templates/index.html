@@ -851,7 +851,7 @@
 
         .chart-container {
             position: relative;
-            height: 380px;
+            height: 500px;
         }
 
         /* ===== UTILITY ===== */
@@ -1019,6 +1019,7 @@
         /* ===== COMPANY FILTER ===== */
         .ticker-filter-container {
             position: relative;
+            z-index: 1000;
         }
 
         .ticker-search-input {
@@ -1253,18 +1254,6 @@
                                 <option value="all">All Sources</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
-                            <label><i class="bi bi-building"></i> Company</label>
-                            <div class="ticker-filter-container">
-                                <input type="text" id="ticker-search" class="ticker-search-input"
-                                       placeholder="Search ticker or name..."
-                                       autocomplete="off"
-                                       onfocus="showTickerDropdown()"
-                                       oninput="filterTickerDropdown()">
-                                <div id="ticker-dropdown" class="ticker-dropdown"></div>
-                            </div>
-                            <div id="selected-tickers" class="selected-tickers"></div>
-                        </div>
                         <div class="col-md-2">
                             <label><i class="bi bi-search"></i> Keyword</label>
                             <input type="text" id="filter-keyword" class="form-control-dark" placeholder="Search title or summary...">
@@ -1290,6 +1279,20 @@
                             <button class="btn-filter w-100" onclick="applyFilters()">
                                 <i class="bi bi-funnel-fill"></i> Apply
                             </button>
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-0">
+                        <div class="col-md-3">
+                            <label><i class="bi bi-building"></i> Company</label>
+                            <div class="ticker-filter-container">
+                                <input type="text" id="ticker-search" class="ticker-search-input"
+                                       placeholder="Search ticker or name..."
+                                       autocomplete="off"
+                                       onfocus="showTickerDropdown()"
+                                       oninput="filterTickerDropdown()">
+                                <div id="ticker-dropdown" class="ticker-dropdown"></div>
+                            </div>
+                            <div id="selected-tickers" class="selected-tickers"></div>
                         </div>
                     </div>
                 </div>
@@ -1350,6 +1353,8 @@
                 </div>
 
                 <div id="clusters-container"></div>
+
+                <div id="cluster-pagination" class="pagination-bar mt-3"></div>
             </div>
             <!-- End Clusters View -->
 
@@ -1359,7 +1364,7 @@
                 <div class="analytics-subtitle">Breakdown of articles by ingestion source</div>
 
                 <div class="row g-4">
-                    <div class="col-md-6">
+                    <div class="col-12">
                         <div class="chart-card">
                             <div class="chart-card-header">
                                 <h5><i class="bi bi-collection"></i> Total Articles by Source</h5>
@@ -1371,7 +1376,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-12">
                         <div class="chart-card">
                             <div class="chart-card-header">
                                 <h5><i class="bi bi-calendar-day"></i> Last 24 Hours by Source</h5>
@@ -1721,9 +1726,9 @@
         });
 
         // ==================== CLUSTER VIEWING ====================
-        let clustersLoaded = false;
         let currentClusterHours = 24;
-        let allClusters = [];  // Store all fetched clusters for client-side filtering
+        let currentClusterPage = 1;
+        let clusterRangeTimer = null;
 
         // Range slider setup
         (function initRangeSlider() {
@@ -1752,8 +1757,12 @@
                     fill.style.left = pctMin + '%';
                     fill.style.width = (pctMax - pctMin) + '%';
 
-                    // Filter clusters client-side
-                    filterClustersByRange(minVal / 100, maxVal / 100);
+                    // Debounce server request
+                    clearTimeout(clusterRangeTimer);
+                    clusterRangeTimer = setTimeout(() => {
+                        currentClusterPage = 1;
+                        loadClusters();
+                    }, 300);
                 }
 
                 rangeMin.addEventListener('input', updateSlider);
@@ -1766,15 +1775,6 @@
             });
         })();
 
-        function filterClustersByRange(minSim, maxSim) {
-            if (!allClusters.length) return;
-
-            const filtered = allClusters.filter(c => c.avg_similarity >= minSim && c.avg_similarity <= maxSim);
-            document.getElementById('range-match-count').textContent = filtered.length + ' / ' + allClusters.length + ' clusters';
-            renderClusters(filtered);
-            updateClusterStats(filtered);
-        }
-
         function onClusterTimeRangeChange() {
             const hours = parseInt(document.getElementById('cluster-time-range').value);
             currentClusterHours = hours;
@@ -1784,25 +1784,21 @@
             const labels = { 24: 'the last 24 hours', 168: 'the last 7 days', 720: 'the last 30 days', 0: 'all time' };
             infoText.textContent = 'Showing clusters from ' + (labels[hours] || 'the last 24 hours') + '.';
 
-            // Force reload
-            clustersLoaded = false;
+            currentClusterPage = 1;
             loadClusters();
         }
 
-        function updateClusterStats(clusters) {
+        function updateClusterStats(totalClusters, totalArticles, avgSize) {
             const statsDiv = document.getElementById('cluster-stats');
-            const totalClustered = clusters.reduce((sum, c) => sum + c.size, 0);
-            const avgSize = clusters.length > 0 ? (totalClustered / clusters.length).toFixed(1) : '0';
-
             statsDiv.innerHTML = `
                 <div class="stat-card">
                     <div class="stat-card-label">Total Clusters</div>
-                    <div class="stat-card-value" style="color: var(--accent-purple);">${clusters.length.toLocaleString()}</div>
+                    <div class="stat-card-value" style="color: var(--accent-purple);">${totalClusters.toLocaleString()}</div>
                     <i class="bi bi-diagram-3 stat-card-icon"></i>
                 </div>
                 <div class="stat-card">
                     <div class="stat-card-label">Clustered Articles</div>
-                    <div class="stat-card-value" style="color: var(--accent-blue);">${totalClustered.toLocaleString()}</div>
+                    <div class="stat-card-value" style="color: var(--accent-blue);">${totalArticles.toLocaleString()}</div>
                     <i class="bi bi-files stat-card-icon"></i>
                 </div>
                 <div class="stat-card">
@@ -1820,7 +1816,7 @@
             if (clusters.length === 0) {
                 container.innerHTML = `
                     <div class="alert-dark-warning">
-                        <i class="bi bi-exclamation-triangle"></i> No clusters match the selected strength range.
+                        <i class="bi bi-exclamation-triangle"></i> No clusters match the selected filters.
                     </div>
                 `;
                 return;
@@ -1892,38 +1888,73 @@
             });
         }
 
-        function loadClusters() {
-            if (clustersLoaded) return;
+        function updateClusterPagination(page, totalPages, totalClusters) {
+            const pagination = document.getElementById('cluster-pagination');
+            pagination.innerHTML = '';
 
+            document.getElementById('range-match-count').textContent = totalClusters + ' clusters';
+
+            if (totalPages <= 1) return;
+
+            // Previous button
+            if (page > 1) {
+                const prev = document.createElement('button');
+                prev.className = 'btn-page';
+                prev.innerHTML = '<i class="bi bi-chevron-left"></i> Previous';
+                prev.onclick = () => { currentClusterPage--; loadClusters(); window.scrollTo(0, 0); };
+                pagination.appendChild(prev);
+            }
+
+            // Page info
+            const info = document.createElement('span');
+            info.className = 'page-info';
+            info.textContent = `Page ${page} of ${totalPages.toLocaleString()}`;
+            pagination.appendChild(info);
+
+            // Next button
+            if (page < totalPages) {
+                const next = document.createElement('button');
+                next.className = 'btn-page';
+                next.innerHTML = 'Next <i class="bi bi-chevron-right"></i>';
+                next.onclick = () => { currentClusterPage++; loadClusters(); window.scrollTo(0, 0); };
+                pagination.appendChild(next);
+            }
+        }
+
+        function loadClusters() {
             document.getElementById('cluster-loading-spinner').style.display = 'block';
             document.getElementById('clusters-container').innerHTML = '';
+            document.getElementById('cluster-pagination').innerHTML = '';
 
-            const params = new URLSearchParams({ hours: currentClusterHours });
+            const minVal = parseInt(document.getElementById('range-min').value);
+            const maxVal = parseInt(document.getElementById('range-max').value);
+
+            const params = new URLSearchParams({
+                hours: currentClusterHours,
+                page: currentClusterPage,
+                per_page: 20,
+                min_similarity: (minVal / 100).toFixed(2),
+                max_similarity: (maxVal / 100).toFixed(2)
+            });
+
             fetch(`/api/clusters?${params}`)
                 .then(res => res.json())
                 .then(data => {
                     document.getElementById('cluster-loading-spinner').style.display = 'none';
-                    clustersLoaded = true;
-                    allClusters = data.clusters;
 
-                    // Apply current range filter
-                    const minVal = parseInt(document.getElementById('range-min').value);
-                    const maxVal = parseInt(document.getElementById('range-max').value);
-                    const filtered = allClusters.filter(c => c.avg_similarity >= minVal / 100 && c.avg_similarity <= maxVal / 100);
-
-                    document.getElementById('range-match-count').textContent = filtered.length + ' / ' + allClusters.length + ' clusters';
-                    updateClusterStats(filtered);
+                    updateClusterStats(data.total_clusters, data.total_articles, data.avg_size);
+                    updateClusterPagination(data.page, data.total_pages, data.total_clusters);
 
                     if (data.clusters.length === 0) {
                         document.getElementById('clusters-container').innerHTML = `
                             <div class="alert-dark-warning">
-                                <i class="bi bi-exclamation-triangle"></i> ${data.message || 'No clusters found for this time range.'}
+                                <i class="bi bi-exclamation-triangle"></i> No clusters match the selected filters.
                             </div>
                         `;
                         return;
                     }
 
-                    renderClusters(filtered);
+                    renderClusters(data.clusters);
                 })
                 .catch(err => {
                     console.error('Failed to load clusters:', err);
@@ -1963,12 +1994,12 @@
                             legend: {
                                 position: 'right',
                                 labels: {
-                                    color: '#8b949e',
+                                    color: '#e6edf3',
                                     font: {
                                         family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-                                        size: 11
+                                        size: 12
                                     },
-                                    padding: 12,
+                                    padding: 14,
                                     usePointStyle: true,
                                     pointStyleWidth: 10
                                 }
