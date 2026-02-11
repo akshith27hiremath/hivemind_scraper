@@ -20,7 +20,7 @@ The system follows an **Archive-First** philosophy:
 |-------------|--------|---------|
 | **Digital Ocean Droplet** | ✅ FULLY DEPLOYED | 2 CPU / 4GB RAM, all 4 services running |
 | **Local Development** | ✅ Active | Synced DB for dev/testing, Docker containers available |
-| **Database** | ~149K articles | 112K+ classified, 53K FACTUAL, 9,019 clusters, 58% dedup |
+| **Database** | ~149K articles | 112K+ classified, 53K FACTUAL, 9K clusters, 70K+ entity mentions |
 
 ### Production URL
 - **Web Dashboard**: http://159.89.162.233:5000
@@ -31,7 +31,7 @@ The system follows an **Archive-First** philosophy:
 ## Key Directories
 
 - `ingestion-worker/` — News collection (RSS, APIs, SEC EDGAR)
-- `processing-worker/` — Classification + Clustering (hourly scheduler)
+- `processing-worker/` — Entity Mapping + Classification + Clustering (hourly scheduler)
 - `web-dashboard/` — Flask dashboard with dark theme
 - `database/schema/` — PostgreSQL migrations
 - `scripts/` — Sync scripts for pulling production data locally
@@ -74,6 +74,9 @@ classification_model_version VARCHAR(50)   -- e.g., 'distilbert-base-uncased-v1'
 classified_at TIMESTAMP                    -- When classified
 ready_for_kg BOOLEAN                       -- TRUE for FACTUAL articles
 
+-- Entity mapping metadata
+entity_mapped_at TIMESTAMP          -- When entity mapper processed this article
+
 -- Clustering metadata (populated by processing-worker)
 cluster_batch_id UUID               -- Which clustering run
 cluster_label INTEGER               -- Cluster ID (-1 = noise/unique)
@@ -95,10 +98,25 @@ created_at TIMESTAMP
 UNIQUE (cluster_batch_id, article_id)
 ```
 
+#### `article_company_mentions` (~70K rows)
+Junction table linking articles to S&P 500 companies via regex entity matching.
+```sql
+id SERIAL PRIMARY KEY
+article_id INTEGER NOT NULL REFERENCES articles_raw(id) ON DELETE CASCADE
+company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE
+ticker VARCHAR(10) NOT NULL           -- Denormalized for fast display
+mention_type VARCHAR(10) NOT NULL     -- 'title', 'summary', 'both'
+match_method VARCHAR(10) NOT NULL     -- 'ticker', 'name', 'alias', 'brand'
+matched_text TEXT                     -- What actually matched
+confidence DOUBLE PRECISION NOT NULL  -- 0.0-1.0
+created_at TIMESTAMP
+UNIQUE(article_id, company_id)
+```
+
 ### Other Tables (not actively used)
 - `articles_processed` - Legacy processing table
 - `mechanical_refinery_results` - Legacy results
-- `entity_mentions` - For future entity extraction
+- `entity_mentions` - Legacy (replaced by `article_company_mentions`)
 
 ---
 
@@ -124,7 +142,7 @@ services:
     depends_on: postgres (healthy)
     volumes:
       - ./processing-worker/src/models:/app/src/models:ro  # DistilBERT model
-    # Runs processing_scheduler.py - classification at :00, clustering at :05
+    # Runs processing_scheduler.py - entity mapping at :00, classification at :02, clustering at :05
 
   web-dashboard:
     container_name: sp500_web_dashboard
@@ -156,6 +174,48 @@ docker-compose logs -f processing-worker  # Watch classification/clustering
 - **Average**: ~1,360 non-SEC articles/day
 - **Peak**: ~3,000 articles/day (weekdays during market hours)
 - **SEC EDGAR**: ~500-1,500 filings/day (excluded from clustering)
+
+---
+
+## Entity Mapping System
+
+**Status**: ✅ Deployed and running in production (Feb 2026)
+**Purpose**: Link articles to S&P 500 companies for per-company filtering and analysis
+
+### How It Works
+
+Regex-based entity matching scans article titles and summaries against:
+1. **Company names** (confidence 1.0) - e.g., `\bApple\b`
+2. **Aliases** (confidence 0.95) - e.g., `\bgoogle\b` → GOOGL
+3. **Non-ambiguous tickers** (confidence 0.9) - case-sensitive, 3+ chars
+4. **Ambiguous tickers** (confidence 0.85) - require `$TICKER` format
+5. **Brand names** (confidence 0.8) - e.g., `\biphone\b` → AAPL
+
+### Key Components
+
+| File | Purpose |
+|------|---------|
+| `processing-worker/src/mechanical_refinery/entity_mapper.py` | `CompanyEntityMapper` class - regex engine |
+| `processing-worker/src/mechanical_refinery/company_aliases.py` | 400+ curated aliases |
+| `processing-worker/run_entity_backfill.py` | One-time backfill script |
+| `processing-worker/fix_tgt_ice_backfill.py` | False positive cleanup script |
+
+### False Positive Prevention
+
+- **Negative phrase stripping**: "price target", "target raised", etc. removed before matching (prevents TGT false positives)
+- **Ambiguous ticker gating**: Common-word tickers (ICE, ALL, LOW, META, etc.) require `$` prefix
+- **Removed NYSE alias for ICE**: "nyse"/"new york stock exchange" were generating 1,800+ false ICE matches
+
+### Production Stats
+
+- 70,451 company mentions across 503 companies
+- Top: NVDA 1,849 | JPM 1,721 | GOOGL 1,636
+- 45.5% of articles match at least one company
+- Match breakdown: name 64% | alias 27% | ticker 8% | brand 1%
+
+### Tracking
+
+Articles get `entity_mapped_at` timestamp after processing (whether they match companies or not). This prevents re-processing articles that match zero companies.
 
 ---
 
@@ -386,6 +446,8 @@ Code exists but **DO NOT USE**. Embeddings approach is production-proven.
 | `GET /api/stats` | Database statistics |
 | `GET /api/clusters` | **ALL clusters** across all batches |
 | `GET /api/source-breakdown` | Pie chart data |
+| `GET /api/companies` | Companies with mention counts (for ticker filter) |
+| `GET /api/company-stats` | Top 25 mentioned companies in last N days |
 | `GET /api/health` | Service health check |
 
 ### Cluster API Response
@@ -462,21 +524,22 @@ python run_sliding_window_clustering.py --dry-run
 | Component | Status | Details |
 |-----------|--------|---------|
 | **Ingestion** | ✅ Running | 10 RSS + APIs + SEC, ~1,360 articles/day |
-| **Classification** | ✅ Running | DistilBERT @ 86.5% accuracy, hourly at :00 |
+| **Entity Mapping** | ✅ Running | 503 companies, 1956 regex patterns, hourly at :00 |
+| **Classification** | ✅ Running | DistilBERT @ 86.5% accuracy, hourly at :02 |
 | **Clustering** | ✅ Running | 48h windows, title-only embeddings, hourly at :05 |
-| **Web Dashboard** | ✅ Running | Dark theme, similarity slider, source analytics |
-| **Database** | ✅ Healthy | 149K articles, 112K classified, 53K FACTUAL, 9K clusters |
+| **Web Dashboard** | ✅ Running | Dark theme, company filter, ticker badges, source analytics |
+| **Database** | ✅ Healthy | 149K articles, 112K classified, 53K FACTUAL, 70K+ entity mentions |
 
 ### Automated Processing Pipeline
 
 The processing-worker runs `processing_scheduler.py` which:
-1. **Classification at :00** - Classifies articles fetched in last 2 hours (uses `fetched_at`, not `published_at`)
-2. **Clustering at :05** - Clusters FACTUAL articles from last 6 hours
-3. **Data freshness**: <1 hour for new articles
+1. **Entity Mapping at :00** - Maps articles to S&P 500 companies (all non-SEC articles, uses `entity_mapped_at IS NULL`)
+2. **Classification at :02** - Classifies articles fetched in last 2 hours (uses `fetched_at`, not `published_at`)
+3. **Clustering at :05** - Clusters FACTUAL articles from last 6 hours
+4. **Data freshness**: <1 hour for new articles
 
 ### Future Work
 - Knowledge graph integration
-- Entity extraction pipeline
 - Verb filter / entity density filters
 
 ---
@@ -514,7 +577,7 @@ POSTGRES_HOST=localhost python test_clustering_dry_run.py
 3. **SEC EDGAR excluded** - Form 4/8-K filings excluded from ALL processing (clustering, classification)
 4. **48-hour windows** - Cluster articles published within same 48h period
 5. **Docker PostgreSQL ONLY** - NEVER use local PostgreSQL installation. Stop it with `net stop postgresql-x64-17` if running. All database access must go through Docker container `sp500_postgres`
-6. **Classification before clustering** - Pipeline order: classify → filter FACTUAL → cluster
+6. **Pipeline order** - Entity mapping(:00) → Classification(:02) → Clustering(:05). Entity mapping runs on ALL non-SEC articles; clustering only on FACTUAL
 7. **Headline + Summary** - Classifier sees both for better context (not just headline)
 8. **UUID as string** - Always convert `uuid.uuid4()` to `str()` for psycopg2 compatibility
 9. **Both environments active** - Droplet runs production; local Docker available for dev/testing
@@ -530,6 +593,9 @@ POSTGRES_HOST=localhost python test_clustering_dry_run.py
 | Modify classification prompt | Sandbox: http://localhost:5050 (live editor) OR `teacher_labeler.py` line 30 |
 | Test classification | `processing-worker/sandbox_labeler.py` (web UI) |
 | Train classifier | `processing-worker/train_bert_classifier.py` |
+| Modify entity mapping | `processing-worker/src/mechanical_refinery/entity_mapper.py` |
+| Edit company aliases | `processing-worker/src/mechanical_refinery/company_aliases.py` |
+| Run entity backfill | `processing-worker/run_entity_backfill.py` |
 | Add API endpoint | `web-dashboard/app.py` |
 | Change database schema | `database/schema/*.sql` (+ migration) |
 | Debug ingestion | `ssh droplet` → `docker-compose logs -f ingestion-worker` |
