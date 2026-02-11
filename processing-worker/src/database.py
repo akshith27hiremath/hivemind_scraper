@@ -541,3 +541,123 @@ class ProcessingDatabaseManager:
                     LIMIT %s
                 """, (limit,))
                 return [dict(row) for row in cur.fetchall()]
+
+    # =========================================================================
+    # ENTITY MAPPING METHODS
+    # =========================================================================
+
+    def get_companies_lookup(self) -> List[Dict]:
+        """
+        Get all companies for entity mapper initialization.
+
+        Returns:
+            List of dicts with id, ticker, name, sector, industry
+        """
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT id, ticker, name, sector, industry
+                    FROM companies
+                    ORDER BY ticker
+                """)
+                return [dict(row) for row in cur.fetchall()]
+
+    def get_unmapped_articles(
+        self,
+        limit: int = 5000,
+        lookback_hours: int = None,
+        exclude_sec_edgar: bool = True
+    ) -> List[Dict]:
+        """
+        Get articles not yet processed by entity mapper.
+
+        Args:
+            limit: Maximum number of articles
+            lookback_hours: Only get articles fetched in last N hours
+            exclude_sec_edgar: Exclude SEC EDGAR sources
+
+        Returns:
+            List of article dicts with id, title, summary, source
+        """
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                conditions = ["a.entity_mapped_at IS NULL"]
+                params = []
+
+                if exclude_sec_edgar:
+                    conditions.append("a.source NOT LIKE 'SEC EDGAR%%'")
+
+                if lookback_hours:
+                    cutoff = datetime.now() - timedelta(hours=lookback_hours)
+                    conditions.append("a.fetched_at >= %s")
+                    params.append(cutoff)
+
+                where_clause = " AND ".join(conditions)
+                params.append(limit)
+
+                cur.execute(f"""
+                    SELECT a.id, a.title, a.summary, a.source
+                    FROM articles_raw a
+                    WHERE {where_clause}
+                    ORDER BY a.fetched_at DESC
+                    LIMIT %s
+                """, params)
+                return [dict(row) for row in cur.fetchall()]
+
+    def save_entity_mentions(self, mentions_by_article: Dict, all_article_ids: List[int] = None) -> int:
+        """
+        Bulk save entity mentions and mark articles as entity-mapped.
+
+        Args:
+            mentions_by_article: Dict mapping article_id -> list of CompanyMention
+            all_article_ids: All article IDs that were processed (including no-match).
+                             If None, only stamps articles that had matches.
+
+        Returns:
+            Number of mentions saved
+        """
+        with self.get_connection() as conn:
+            with conn.cursor() as cur:
+                # Save mention records
+                records = []
+                for article_id, mentions in mentions_by_article.items():
+                    for m in mentions:
+                        records.append({
+                            'article_id': m.article_id,
+                            'company_id': m.company_id,
+                            'ticker': m.ticker,
+                            'mention_type': m.mention_type,
+                            'match_method': m.match_method,
+                            'matched_text': m.matched_text,
+                            'confidence': m.confidence,
+                        })
+
+                if records:
+                    execute_batch(cur, """
+                        INSERT INTO article_company_mentions
+                            (article_id, company_id, ticker, mention_type,
+                             match_method, matched_text, confidence)
+                        VALUES (%(article_id)s, %(company_id)s, %(ticker)s,
+                                %(mention_type)s, %(match_method)s, %(matched_text)s,
+                                %(confidence)s)
+                        ON CONFLICT (article_id, company_id) DO UPDATE
+                        SET confidence = GREATEST(
+                                article_company_mentions.confidence,
+                                EXCLUDED.confidence
+                            ),
+                            mention_type = EXCLUDED.mention_type,
+                            match_method = EXCLUDED.match_method,
+                            matched_text = EXCLUDED.matched_text
+                    """, records)
+
+                # Stamp entity_mapped_at on ALL processed articles
+                stamp_ids = all_article_ids or list(mentions_by_article.keys())
+                if stamp_ids:
+                    cur.execute("""
+                        UPDATE articles_raw
+                        SET entity_mapped_at = NOW()
+                        WHERE id = ANY(%s) AND entity_mapped_at IS NULL
+                    """, (stamp_ids,))
+
+        logger.info(f"Saved {len(records)} entity mentions for {len(mentions_by_article)} articles")
+        return len(records)

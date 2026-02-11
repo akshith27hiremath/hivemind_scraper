@@ -39,64 +39,95 @@ def get_articles():
         days: Articles from last N days
         limit: Number of articles (default: 50)
         offset: Pagination offset (default: 0)
+        ticker: Comma-separated tickers to filter by (e.g. "AAPL,MSFT")
     """
     source = request.args.get('source', '')
     keyword = request.args.get('keyword', '')
     days = request.args.get('days', type=int)
     limit = request.args.get('limit', 50, type=int)
     offset = request.args.get('offset', 0, type=int)
+    ticker = request.args.get('ticker', '')
 
-    # Build query
-    query = """
-        SELECT url, title, summary, source, published_at, fetched_at, classification_label
-        FROM articles_raw
-        WHERE 1=1
-    """
     params = []
+    joins = []
+    conditions = ["1=1"]
+
+    if ticker:
+        tickers = [t.strip().upper() for t in ticker.split(',') if t.strip()]
+        if tickers:
+            joins.append("JOIN article_company_mentions acm ON acm.article_id = a.id")
+            placeholders = ','.join(['%s'] * len(tickers))
+            conditions.append(f"acm.ticker IN ({placeholders})")
+            params.extend(tickers)
 
     if source and source != 'all':
-        query += " AND source = %s"
+        conditions.append("a.source = %s")
         params.append(source)
 
     if keyword:
-        query += " AND (title ILIKE %s OR summary ILIKE %s)"
+        conditions.append("(a.title ILIKE %s OR a.summary ILIKE %s)")
         params.extend([f"%{keyword}%", f"%{keyword}%"])
 
     if days:
-        query += " AND fetched_at >= %s"
+        conditions.append("a.fetched_at >= %s")
         cutoff_date = datetime.now() - timedelta(days=days)
         params.append(cutoff_date)
 
-    query += " ORDER BY published_at DESC NULLS LAST, fetched_at DESC"
-    query += f" LIMIT {limit} OFFSET {offset}"
+    join_clause = ' '.join(joins)
+    where_clause = ' AND '.join(conditions)
 
-    # Get total count for pagination
-    count_query = query.split('ORDER BY')[0].replace(
-        'SELECT url, title, summary, source, published_at, fetched_at, classification_label',
-        'SELECT COUNT(*)'
-    )
+    # Use DISTINCT when joining to avoid duplicates (article mentions multiple tickers)
+    distinct = "DISTINCT " if ticker else ""
+
+    full_query = f"""
+        SELECT {distinct}a.id, a.url, a.title, a.summary, a.source, a.published_at, a.fetched_at, a.classification_label
+        FROM articles_raw a
+        {join_clause}
+        WHERE {where_clause}
+        ORDER BY a.published_at DESC NULLS LAST, a.fetched_at DESC
+        LIMIT {limit} OFFSET {offset}
+    """
+
+    count_query = f"""
+        SELECT COUNT({distinct}a.id)
+        FROM articles_raw a
+        {join_clause}
+        WHERE {where_clause}
+    """
 
     with db_manager.get_connection() as conn:
         with conn.cursor() as cur:
-            # Get articles
-            cur.execute(query, params)
+            cur.execute(full_query, params)
             articles = cur.fetchall()
 
-            # Get total count
             cur.execute(count_query, params)
             total = cur.fetchone()[0]
+
+            # Batch fetch tickers for returned articles
+            article_ids = [a[0] for a in articles]
+            article_tickers = {}
+            if article_ids:
+                cur.execute("""
+                    SELECT article_id, ARRAY_AGG(DISTINCT ticker ORDER BY ticker)
+                    FROM article_company_mentions
+                    WHERE article_id = ANY(%s)
+                    GROUP BY article_id
+                """, (article_ids,))
+                for row in cur.fetchall():
+                    article_tickers[row[0]] = row[1]
 
     # Format results
     results = []
     for article in articles:
         results.append({
-            'url': article[0],
-            'title': article[1],
-            'summary': article[2] or '',
-            'source': article[3],
-            'published_at': article[4].isoformat() if article[4] else None,
-            'fetched_at': article[5].isoformat() if article[5] else None,
-            'classification_label': article[6] if len(article) > 6 else None,
+            'url': article[1],
+            'title': article[2],
+            'summary': article[3] or '',
+            'source': article[4],
+            'published_at': article[5].isoformat() if article[5] else None,
+            'fetched_at': article[6].isoformat() if article[6] else None,
+            'classification_label': article[7] if len(article) > 7 else None,
+            'tickers': article_tickers.get(article[0], []),
         })
 
     return jsonify({
@@ -484,6 +515,68 @@ def health_check():
         health_status['overall'] = 'warning'
 
     return jsonify(health_status)
+
+
+@app.route('/api/companies')
+def get_companies():
+    """
+    Get companies that have at least 1 article mention, sorted by mention count.
+    Used to populate the company filter dropdown.
+    """
+    with db_manager.get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT c.ticker, c.name, c.sector, COUNT(acm.id) as mention_count
+                FROM companies c
+                JOIN article_company_mentions acm ON acm.company_id = c.id
+                GROUP BY c.id, c.ticker, c.name, c.sector
+                HAVING COUNT(acm.id) > 0
+                ORDER BY mention_count DESC
+            """)
+            results = cur.fetchall()
+
+    companies = [
+        {'ticker': r[0], 'name': r[1], 'sector': r[2], 'mention_count': r[3]}
+        for r in results
+    ]
+    return jsonify({'companies': companies})
+
+
+@app.route('/api/company-stats')
+def get_company_stats():
+    """
+    Get top 25 most-mentioned companies with stats.
+    Used for the analytics section.
+
+    Query params:
+        days: Time window in days (default: 30). Use 0 for all time.
+    """
+    days = request.args.get('days', 30, type=int)
+
+    with db_manager.get_connection() as conn:
+        with conn.cursor() as cur:
+            params = []
+            time_filter = ""
+            if days > 0:
+                time_filter = "WHERE acm.created_at >= NOW() - INTERVAL '%s days'"
+                params = [days]
+
+            cur.execute(f"""
+                SELECT c.ticker, c.name, c.sector, COUNT(acm.id) as mention_count
+                FROM article_company_mentions acm
+                JOIN companies c ON c.id = acm.company_id
+                {time_filter}
+                GROUP BY c.id, c.ticker, c.name, c.sector
+                ORDER BY mention_count DESC
+                LIMIT 25
+            """, params)
+            results = cur.fetchall()
+
+    companies = [
+        {'ticker': r[0], 'name': r[1], 'sector': r[2], 'mentions': r[3]}
+        for r in results
+    ]
+    return jsonify({'companies': companies})
 
 
 if __name__ == '__main__':

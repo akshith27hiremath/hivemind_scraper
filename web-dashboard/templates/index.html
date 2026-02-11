@@ -1015,6 +1015,146 @@
             color: var(--text-muted);
             font-size: 0.8rem;
         }
+
+        /* ===== COMPANY FILTER ===== */
+        .ticker-filter-container {
+            position: relative;
+        }
+
+        .ticker-search-input {
+            background-color: var(--bg-input);
+            border: 1px solid var(--border-primary);
+            color: var(--text-primary);
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            padding: 0.5rem 0.75rem;
+            width: 100%;
+            transition: all var(--transition-fast);
+        }
+
+        .ticker-search-input:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px var(--accent-blue-dim);
+            outline: none;
+        }
+
+        .ticker-search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .ticker-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 250px;
+            overflow-y: auto;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-top: none;
+            border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+            z-index: 1000;
+            display: none;
+            box-shadow: var(--shadow-md);
+        }
+
+        .ticker-dropdown-item {
+            padding: 0.45rem 0.75rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.82rem;
+            color: var(--text-primary);
+            transition: background var(--transition-fast);
+        }
+
+        .ticker-dropdown-item:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .ticker-dropdown-item.selected {
+            background: var(--accent-blue-dim);
+        }
+
+        .ticker-dropdown-item .ticker-symbol {
+            font-family: var(--font-mono);
+            font-weight: 600;
+            color: var(--accent-cyan);
+            min-width: 50px;
+        }
+
+        .ticker-dropdown-item .company-name {
+            color: var(--text-secondary);
+            font-size: 0.78rem;
+            flex: 1;
+            margin: 0 0.5rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .ticker-dropdown-item .mention-count {
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        .selected-tickers {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.3rem;
+            margin-top: 0.4rem;
+            min-height: 0;
+        }
+
+        .selected-ticker-badge {
+            font-size: 0.7rem;
+            font-family: var(--font-mono);
+            font-weight: 600;
+            padding: 0.15rem 0.45rem;
+            border-radius: 4px;
+            background: var(--accent-cyan);
+            color: var(--bg-primary);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .selected-ticker-badge:hover {
+            background: var(--accent-red);
+        }
+
+        .selected-ticker-badge .remove-x {
+            font-size: 0.6rem;
+            opacity: 0.7;
+        }
+
+        /* ===== TICKER BADGES ON ARTICLE CARDS ===== */
+        .badge-ticker {
+            font-size: 0.62rem;
+            font-family: var(--font-mono);
+            font-weight: 600;
+            padding: 0.12rem 0.4rem;
+            border-radius: 4px;
+            background: rgba(57, 211, 83, 0.12);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(57, 211, 83, 0.2);
+            white-space: nowrap;
+        }
+
+        .badge-ticker-overflow {
+            font-size: 0.62rem;
+            font-family: var(--font-mono);
+            font-weight: 500;
+            padding: 0.12rem 0.4rem;
+            border-radius: 4px;
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            border: 1px solid var(--border-subtle);
+        }
     </style>
 </head>
 <body>
@@ -1107,13 +1247,25 @@
                 <!-- Filters Section -->
                 <div class="filter-bar">
                     <div class="row g-3 align-items-end">
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label><i class="bi bi-funnel"></i> Source</label>
                             <select id="filter-source" class="form-select-dark">
                                 <option value="all">All Sources</option>
                             </select>
                         </div>
                         <div class="col-md-3">
+                            <label><i class="bi bi-building"></i> Company</label>
+                            <div class="ticker-filter-container">
+                                <input type="text" id="ticker-search" class="ticker-search-input"
+                                       placeholder="Search ticker or name..."
+                                       autocomplete="off"
+                                       onfocus="showTickerDropdown()"
+                                       oninput="filterTickerDropdown()">
+                                <div id="ticker-dropdown" class="ticker-dropdown"></div>
+                            </div>
+                            <div id="selected-tickers" class="selected-tickers"></div>
+                        </div>
+                        <div class="col-md-2">
                             <label><i class="bi bi-search"></i> Keyword</label>
                             <input type="text" id="filter-keyword" class="form-control-dark" placeholder="Search title or summary...">
                         </div>
@@ -1126,17 +1278,17 @@
                                 <option value="30">Last 30 Days</option>
                             </select>
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-1">
                             <label><i class="bi bi-list-ol"></i> Show</label>
                             <select id="filter-limit" class="form-select-dark">
-                                <option value="20">20 articles</option>
-                                <option value="50" selected>50 articles</option>
-                                <option value="100">100 articles</option>
+                                <option value="20">20</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
                             </select>
                         </div>
                         <div class="col-md-2">
                             <button class="btn-filter w-100" onclick="applyFilters()">
-                                <i class="bi bi-funnel-fill"></i> Apply Filters
+                                <i class="bi bi-funnel-fill"></i> Apply
                             </button>
                         </div>
                     </div>
@@ -1244,10 +1396,13 @@
         let currentOffset = 0;
         let currentLimit = 50;
         let totalArticles = 0;
+        let allCompanies = [];      // All companies from /api/companies
+        let selectedTickers = [];   // Currently selected ticker filters
 
         // Load initial data
         window.onload = function() {
             loadSources();
+            loadCompanies();
             loadStats();
             checkHealth();
             loadArticles();
@@ -1268,6 +1423,63 @@
                         select.appendChild(option);
                     });
                 });
+        }
+
+        function loadCompanies() {
+            fetch('/api/companies')
+                .then(res => res.json())
+                .then(data => {
+                    allCompanies = data.companies;
+                });
+        }
+
+        function showTickerDropdown() {
+            filterTickerDropdown();
+            document.getElementById('ticker-dropdown').style.display = 'block';
+        }
+
+        function filterTickerDropdown() {
+            const query = document.getElementById('ticker-search').value.toLowerCase();
+            const dropdown = document.getElementById('ticker-dropdown');
+
+            const filtered = allCompanies.filter(c => {
+                if (selectedTickers.includes(c.ticker)) return false;
+                return c.ticker.toLowerCase().includes(query) ||
+                       c.name.toLowerCase().includes(query);
+            }).slice(0, 20);  // Show max 20 results
+
+            dropdown.innerHTML = filtered.map(c => `
+                <div class="ticker-dropdown-item" onclick="toggleTicker('${c.ticker}')">
+                    <span class="ticker-symbol">${c.ticker}</span>
+                    <span class="company-name">${c.name}</span>
+                    <span class="mention-count">${c.mention_count.toLocaleString()}</span>
+                </div>
+            `).join('');
+
+            if (filtered.length === 0 && query) {
+                dropdown.innerHTML = '<div class="ticker-dropdown-item" style="color:var(--text-muted); cursor:default;">No matches</div>';
+            }
+        }
+
+        function toggleTicker(ticker) {
+            if (!selectedTickers.includes(ticker)) {
+                selectedTickers.push(ticker);
+            }
+            document.getElementById('ticker-search').value = '';
+            document.getElementById('ticker-dropdown').style.display = 'none';
+            renderSelectedTickers();
+        }
+
+        function removeTicker(ticker) {
+            selectedTickers = selectedTickers.filter(t => t !== ticker);
+            renderSelectedTickers();
+        }
+
+        function renderSelectedTickers() {
+            const container = document.getElementById('selected-tickers');
+            container.innerHTML = selectedTickers.map(t =>
+                `<span class="selected-ticker-badge" onclick="removeTicker('${t}')">${t} <span class="remove-x">x</span></span>`
+            ).join('');
         }
 
         function loadStats() {
@@ -1346,6 +1558,7 @@
             if (source && source !== 'all') params.append('source', source);
             if (keyword) params.append('keyword', keyword);
             if (days) params.append('days', days);
+            if (selectedTickers.length > 0) params.append('ticker', selectedTickers.join(','));
 
             document.getElementById('loading-spinner').style.display = 'block';
             document.getElementById('articles-container').innerHTML = '';
@@ -1401,12 +1614,24 @@
                 classificationBadge = `<span class="${badgeClass}">${label}</span>`;
             }
 
+            // Ticker badges
+            let tickerBadges = '';
+            if (article.tickers && article.tickers.length > 0) {
+                const maxShow = 5;
+                const shown = article.tickers.slice(0, maxShow);
+                tickerBadges = shown.map(t => `<span class="badge-ticker">${t}</span>`).join('');
+                if (article.tickers.length > maxShow) {
+                    tickerBadges += `<span class="badge-ticker-overflow">+${article.tickers.length - maxShow}</span>`;
+                }
+            }
+
             card.innerHTML = `
                 <div class="d-flex justify-content-between align-items-start mb-1">
                     <div class="article-title flex-grow-1 me-3">
                         <a href="${article.url}" target="_blank">${article.title}</a>
                     </div>
                     <div class="gap-badges flex-shrink-0">
+                        ${tickerBadges}
                         ${classificationBadge}
                         <span class="badge-source">${article.source}</span>
                     </div>
@@ -1483,6 +1708,14 @@
             document.getElementById('filter-keyword').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
                     applyFilters();
+                }
+            });
+
+            // Close ticker dropdown when clicking outside
+            document.addEventListener('click', function(e) {
+                const container = document.querySelector('.ticker-filter-container');
+                if (container && !container.contains(e.target)) {
+                    document.getElementById('ticker-dropdown').style.display = 'none';
                 }
             });
         });

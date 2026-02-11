@@ -28,6 +28,7 @@ from mechanical_refinery.teacher_student.bert_classifier import (
     get_default_bert_model_path
 )
 from mechanical_refinery.clustering import SentenceEmbeddingClusterer
+from mechanical_refinery.entity_mapper import CompanyEntityMapper
 from logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -35,6 +36,7 @@ logger = setup_logger(__name__)
 # Configuration
 CLASSIFICATION_LOOKBACK_HOURS = 2  # Look back 2 hours to catch any missed articles
 CLUSTERING_LOOKBACK_HOURS = 2
+ENTITY_MAPPING_LOOKBACK_HOURS = 2
 BATCH_SIZE = 32
 CHECKPOINT_SIZE = 100
 SIMILARITY_THRESHOLD = 0.5
@@ -145,6 +147,46 @@ def run_scheduled_clustering(db, clusterer):
         return False
 
 
+def run_scheduled_entity_mapping(db, mapper):
+    """
+    Map recently fetched articles to S&P 500 companies.
+    """
+    start_time = datetime.now()
+    logger.info(f"Starting scheduled entity mapping at {start_time}")
+
+    try:
+        articles = db.get_unmapped_articles(
+            limit=10000,
+            lookback_hours=ENTITY_MAPPING_LOOKBACK_HOURS,
+            exclude_sec_edgar=True
+        )
+
+        if not articles:
+            logger.info("No new articles to map")
+            return 0
+
+        logger.info(f"Found {len(articles)} unmapped articles")
+
+        mentions_by_article = mapper.map_articles(articles)
+        total_mentions = sum(len(m) for m in mentions_by_article.values())
+
+        all_ids = [a['id'] for a in articles]
+        db.save_entity_mentions(mentions_by_article, all_article_ids=all_ids)
+
+        elapsed = (datetime.now() - start_time).total_seconds()
+        logger.info(
+            f"Entity mapping: {len(articles)} articles -> "
+            f"{len(mentions_by_article)} matched, "
+            f"{total_mentions} total mentions in {elapsed:.1f}s"
+        )
+
+        return len(mentions_by_article)
+
+    except Exception as e:
+        logger.error(f"Entity mapping error: {e}", exc_info=True)
+        return 0
+
+
 def wait_until_next_run(target_minute: int):
     """
     Wait until the next occurrence of target_minute.
@@ -186,10 +228,12 @@ def main():
     print("=" * 70)
     print()
     print("Schedule:")
-    print("  - Classification: Every hour at :00")
-    print("  - Clustering:     Every hour at :05")
+    print("  - Entity Mapping:  Every hour at :00 (all articles)")
+    print("  - Classification:  Every hour at :02")
+    print("  - Clustering:      Every hour at :05")
     print()
-    print(f"Classification lookback: {CLASSIFICATION_LOOKBACK_HOURS} hours")
+    print(f"Classification lookback:  {CLASSIFICATION_LOOKBACK_HOURS} hours")
+    print(f"Entity mapping lookback: {ENTITY_MAPPING_LOOKBACK_HOURS} hours")
     print(f"Clustering lookback:     {CLUSTERING_LOOKBACK_HOURS} hours")
     print()
 
@@ -208,17 +252,23 @@ def main():
     )
     logger.info("Sentence embedding model loaded")
 
+    companies = db.get_companies_lookup()
+    mapper = CompanyEntityMapper(companies)
+    logger.info(f"Entity mapper loaded with {len(companies)} companies, {len(mapper.patterns)} patterns")
+
     print()
     print("Scheduler started. Press Ctrl+C to stop.")
     print()
 
     # Run immediately on startup
-    logger.info("Running initial classification and clustering...")
+    logger.info("Running initial entity mapping, classification, and clustering...")
+    run_scheduled_entity_mapping(db, mapper)
     run_scheduled_classification(db, classifier)
     run_scheduled_clustering(db, clusterer)
 
     # Main loop
     last_classification_hour = -1
+    last_entity_mapping_hour = -1
     last_clustering_hour = -1
 
     while not shutdown_requested:
@@ -226,8 +276,13 @@ def main():
         current_hour = now.hour
         current_minute = now.minute
 
-        # Classification at :00
-        if current_minute < 5 and current_hour != last_classification_hour:
+        # Entity mapping at :00 (all articles)
+        if current_minute < 2 and current_hour != last_entity_mapping_hour:
+            run_scheduled_entity_mapping(db, mapper)
+            last_entity_mapping_hour = current_hour
+
+        # Classification at :02
+        if 2 <= current_minute < 5 and current_hour != last_classification_hour:
             run_scheduled_classification(db, classifier)
             last_classification_hour = current_hour
 
