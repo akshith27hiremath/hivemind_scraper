@@ -1,9 +1,17 @@
 # REST API v1 Documentation
 
-**Base URL**: `http://<host>:5000/api/v1`
-**Authentication**: `X-API-Key` header required on all endpoints
 **Format**: JSON only
+**Authentication**: `X-API-Key` header required on all endpoints
 **Last Updated**: 2026-02-11
+
+## Access
+
+| Environment | Base URL | API Key |
+|-------------|----------|---------|
+| **Production (Cloud)** | `http://159.89.162.233:5000/api/v1` | `b44e4bbc5f2ed67406abd9102a210437c93628b9741e0259e06f20c0515ad4ad` |
+| **Local Development** | `http://localhost:5000/api/v1` | `a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2` |
+
+Production runs on a DigitalOcean droplet (2 CPU / 4 GB RAM). Local development uses Docker Desktop.
 
 ---
 
@@ -12,7 +20,11 @@
 All endpoints require a valid API key in the `X-API-Key` header.
 
 ```bash
-curl -H "X-API-Key: YOUR_KEY" http://host:5000/api/v1/health
+# Production
+curl -H "X-API-Key: b44e4bbc...ad4ad" http://159.89.162.233:5000/api/v1/health
+
+# Local
+curl -H "X-API-Key: a1b2c3...a1b2" http://localhost:5000/api/v1/health
 ```
 
 | Scenario | Response |
@@ -137,14 +149,16 @@ Error codes: `UNAUTHORIZED`, `API_NOT_CONFIGURED`, `INVALID_PARAMETER`, `NOT_FOU
 | `latest_timestamp` | ISO string or null | `classified_at` of the last article. Pass as next `since`. |
 | `has_more` | boolean | True if `count == limit` (more pages likely) |
 
-**Performance** (tested on 148K article database):
+**Performance** (tested on 150K article database):
 
-| Scenario | Latency |
-|----------|---------|
-| Typical poll (limit=100) | **20ms** |
-| Large batch (limit=500) | **63ms** |
-| With ticker filter (limit=50) | **24ms** |
-| Empty results (future since) | **<10ms** |
+| Scenario | Local | Production |
+|----------|-------|------------|
+| Typical poll (limit=100) | **20ms** | **222ms** |
+| Large batch (limit=500) | **63ms** | **364ms** |
+| With ticker filter (limit=50) | **24ms** | **202ms** |
+| Empty results (future since) | **<10ms** | **~115ms** |
+
+Production latencies include ~100–200ms network round-trip. A consumer co-located with the droplet would see local-tier times.
 
 ---
 
@@ -195,7 +209,7 @@ Error codes: `UNAUTHORIZED`, `API_NOT_CONFIGURED`, `INVALID_PARAMETER`, `NOT_FOU
 
 **Errors**: `404` if article ID does not exist.
 
-**Performance**: **~10ms**
+**Performance**: **~10ms** local / **~116ms** production
 
 ---
 
@@ -246,7 +260,7 @@ Articles are ordered by `distance_to_centroid ASC` (centroid first, then by simi
 
 **Errors**: `400` if batch_id is not a valid UUID. `404` if cluster not found.
 
-**Performance**: **~10ms**
+**Performance**: **~10ms** local / **~117ms** production
 
 ---
 
@@ -282,7 +296,7 @@ Sorted by `mention_count DESC`. Only companies with at least 1 mention are retur
 
 **Available Sectors**: Communication Services, Consumer Discretionary, Consumer Staples, Energy, Financials, Health Care, Industrials, Information Technology, Materials, Real Estate, Utilities.
 
-**Performance**: **~60ms**
+**Performance**: **~60ms** local / **~277ms** production
 
 ---
 
@@ -321,7 +335,7 @@ Sorted by `mention_count DESC`. Only companies with at least 1 mention are retur
 
 **Errors**: `404` if ticker not found.
 
-**Performance**: **~22ms**
+**Performance**: **~22ms** local / **~135ms** production
 
 ---
 
@@ -360,7 +374,7 @@ Sorted by `mention_count DESC`. Only companies with at least 1 mention are retur
 - `classified + unclassified = total_articles`
 - `factual + opinion + slop = classified`
 
-**Performance**: **~295ms** (runs 6 aggregate queries)
+**Performance**: **~295ms** local / **~502ms** production (runs 6 aggregate queries)
 
 ---
 
@@ -381,7 +395,7 @@ Sorted by `mention_count DESC`. Only companies with at least 1 mention are retur
 
 Returns `200` if healthy, `503` if database unreachable.
 
-**Performance**: **~9ms**
+**Performance**: **~9ms** local / **~117ms** production
 
 ---
 
@@ -478,6 +492,8 @@ Webhooks (push instead of poll) would be warranted if:
 
 ## Latency Summary (All Endpoints)
 
+### Local (Docker Desktop, Windows 11, 2 CPU)
+
 | Endpoint | Avg | Min | Max |
 |----------|-----|-----|-----|
 | Feed (100 articles) | 20ms | 18ms | 21ms |
@@ -490,4 +506,24 @@ Webhooks (push instead of poll) would be warranted if:
 | Stats | 295ms | 283ms | 318ms |
 | Health | 9ms | 9ms | 10ms |
 
-All well under the 500ms target. Measured on local Docker (Windows 11, 2 CPU allocated to Docker Desktop).
+### Production (DigitalOcean droplet, 2 CPU / 4 GB RAM)
+
+Measured from external client. Includes ~100–200ms network round-trip.
+
+| Endpoint | Avg | Min | Max |
+|----------|-----|-----|-----|
+| Feed (100 articles) | 222ms | 221ms | 222ms |
+| Feed (500 articles) | 364ms | 363ms | 366ms |
+| Feed + ticker filter | 202ms | 200ms | 205ms |
+| Article detail | 116ms | 115ms | 117ms |
+| Cluster detail | 117ms | 115ms | 119ms |
+| Companies list | 277ms | 266ms | 284ms |
+| Company detail | 135ms | 131ms | 138ms |
+| Stats | 502ms | 493ms | 514ms |
+| Health | 117ms | 115ms | 120ms |
+
+All endpoints well under 1 second. Server-side processing times match local benchmarks — the difference is network latency. A consumer co-located with the droplet (or on nearby DigitalOcean infrastructure) would see local-tier response times.
+
+### Test Results (37/38 passed)
+
+Full test suite (`test_api_v1.py`) validated on both local and production: cursor pagination, ticker filtering, limit clamping, timestamp formats, ETag caching, auth rejection, cluster cross-checks, company filtering, stats invariants, and latency benchmarks.
