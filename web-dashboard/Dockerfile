@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application
 COPY app.py .
+COPY api_v1.py .
 COPY templates/ ./templates/
 
 # Expose port

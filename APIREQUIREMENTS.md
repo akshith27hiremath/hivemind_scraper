@@ -1,6 +1,6 @@
 # REST API Requirements
 
-**Last Updated**: 2026-02-10
+**Last Updated**: 2026-02-11
 **Status**: Planning
 **Related**: `TECH-STACK.md`, `CLAUDE.md`
 
@@ -8,7 +8,7 @@
 
 ## Context
 
-The scraperMVP system ingests ~2,700 S&P 500 news articles/day, classifies them (FACTUAL/OPINION/SLOP via DistilBERT at 86.5% accuracy), and clusters duplicates using sentence embeddings. A downstream consumer application needs to poll for deduplicated, classified articles via a REST API.
+The scraperMVP system ingests ~1,360 non-SEC S&P 500 news articles/day, classifies them (FACTUAL/OPINION/SLOP via DistilBERT at 86.5% accuracy), clusters duplicates using sentence embeddings, and maps articles to S&P 500 companies via regex entity matching (70K+ mentions across 503 companies). A downstream consumer application needs to poll for deduplicated, classified, company-tagged articles via a REST API.
 
 Currently, the only external access is either direct DB connection (insecure, exposed on port 5432) or the internal web dashboard (no auth, not designed for machine consumption). The REST API replaces both as the proper interface.
 
@@ -18,7 +18,7 @@ Currently, the only external access is either direct DB connection (insecure, ex
 
 - **Type**: Single application (initially), more consumers possible later
 - **Access pattern**: Polls every 5 minutes for new articles
-- **Data needed**: Deduplicated FACTUAL articles (cluster centroids), eventually filtered by company/ticker
+- **Data needed**: Deduplicated FACTUAL articles (cluster centroids), filtered by company/ticker
 - **Access level**: Read-only
 - **Latency tolerance**: Seconds (not real-time, polling-based)
 
@@ -37,7 +37,8 @@ The core polling endpoint. Returns new FACTUAL centroid articles since the given
 - Supports `since` parameter (ISO 8601 timestamp) to fetch only new articles since last poll
 - Must use cursor-based or timestamp-based pagination (NOT OFFSET - degrades at scale)
 - Response includes a `latest_timestamp` field so the consumer knows what to pass next
-- **Future**: Will support `?ticker=AAPL` filter once article-company mapping (ticker column) is implemented via NLP. Design the endpoint so this filter can be added without breaking changes.
+- Supports `?ticker=AAPL` filter via `article_company_mentions` junction table (entity mapping deployed, 70K+ mentions). Multiple tickers supported: `?ticker=AAPL,MSFT`
+- Each article in the response includes its matched company tickers (from `article_company_mentions`)
 
 **Noise articles** (cluster_label=-1, unique articles with no duplicates) should also be returned - they are valid unique stories, not errors.
 
@@ -46,13 +47,19 @@ The core polling endpoint. Returns new FACTUAL centroid articles since the given
 ## Secondary Endpoints
 
 ### `GET /api/v1/articles/{id}`
-Single article with full detail (title, summary, source, classification, cluster info).
+Single article with full detail (title, summary, source, classification, cluster info, matched company tickers).
 
 ### `GET /api/v1/clusters/{batch_id}/{label}`
 All articles in a specific cluster. Allows consumer to see what was deduplicated.
 
+### `GET /api/v1/companies`
+List of S&P 500 companies with article mention counts. Useful for consumers to discover which tickers are available for filtering. Supports optional `?sector=Technology` filter.
+
+### `GET /api/v1/companies/{ticker}`
+Single company detail with recent mention stats and top articles.
+
 ### `GET /api/v1/stats`
-System statistics: total articles, classification breakdown, cluster counts, ingestion rates.
+System statistics: total articles, classification breakdown, cluster counts, entity mapping coverage, ingestion rates.
 
 ### `GET /api/v1/health`
 Simple healthcheck for monitoring. Database connectivity, service status.
@@ -136,10 +143,12 @@ The existing dashboard routes (`/api/articles`, `/api/clusters`, etc.) remain un
 - Cluster metadata (batch_id, label, distance, size)
 - Classification metadata (label, confidence, model version)
 - All article fields (title, summary, source, url, timestamps)
-
-### Pending (Do Not Block API on These)
-- **Ticker/company mapping**: NLP-based entity extraction to add `ticker` column to `articles_raw`. Separate planning task. API should be designed to accept `?ticker=` filter once available.
-- **Article-company junction table**: Alternative to ticker column for articles mentioning multiple companies.
+- **Entity mapping** via `article_company_mentions` junction table (70K+ rows, 503 companies)
+  - Links articles to S&P 500 companies (ticker, mention_type, match_method, confidence)
+  - 45.5% of articles match at least one company
+  - Tracking column `entity_mapped_at` on `articles_raw`
+  - Indexed on `article_id`, `company_id`, `ticker`
+- **Companies** table with 503 S&P 500 constituents (ticker, name, sector, industry, CIK)
 
 ---
 

@@ -21,6 +21,11 @@ from src.parsers.sec_parser import SECParser
 app = Flask(__name__)
 db_manager = DatabaseManager()
 
+# Register REST API v1 Blueprint
+from api_v1 import api_v1, init_api_v1
+init_api_v1(db_manager)
+app.register_blueprint(api_v1)
+
 
 @app.route('/')
 def index():

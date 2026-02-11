@@ -84,6 +84,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
       ALPHAVANTAGE_API_KEY: ${ALPHAVANTAGE_API_KEY:-}
+      API_V1_KEY: ${API_V1_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
