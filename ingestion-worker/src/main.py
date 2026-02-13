@@ -6,8 +6,13 @@ Starts the scheduler and begins periodic data ingestion.
 
 import sys
 import time
+import socket
 from src.scheduler import IngestionScheduler
 from src.logger import setup_logger
+
+# Global socket timeout safety net — prevents any library from
+# blocking forever on a socket read (feedparser, etc.)
+socket.setdefaulttimeout(60)
 
 logger = setup_logger(__name__)
 

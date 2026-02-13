@@ -45,6 +45,12 @@ services:
     networks:
       - sp500_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os,time; assert time.time()-os.path.getmtime('/tmp/heartbeat')<300\""]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
     volumes:
       - ./ingestion-worker:/app/ingestion-worker:ro
 

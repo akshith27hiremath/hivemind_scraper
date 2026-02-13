@@ -386,6 +386,12 @@ class IngestionScheduler:
             # Run scheduler loop
             while True:
                 schedule.run_pending()
+                # Write heartbeat for Docker healthcheck
+                try:
+                    with open('/tmp/heartbeat', 'w') as f:
+                        f.write(str(time.time()))
+                except Exception:
+                    pass
                 time.sleep(10)  # Check every 10 seconds
 
         except KeyboardInterrupt:

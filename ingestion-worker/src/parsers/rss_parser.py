@@ -5,6 +5,7 @@ Fetches and parses RSS feeds from configured news sources.
 """
 
 import feedparser
+import requests
 from datetime import datetime
 from typing import List, Dict, Optional
 import time
@@ -15,6 +16,9 @@ from src.logger import setup_logger
 from src.database import DatabaseManager
 
 logger = setup_logger(__name__)
+
+# HTTP timeout for RSS feed fetches (connect, read) in seconds
+FEED_TIMEOUT = (10, 30)
 
 
 class RSSParser:
@@ -29,6 +33,10 @@ class RSSParser:
         """
         self.db_manager = db_manager
         self.feeds = Config.RSS_FEEDS
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'S&P500NewsAggregator/1.0'
+        })
 
     def parse_published_date(self, entry) -> Optional[datetime]:
         """
@@ -77,8 +85,10 @@ class RSSParser:
         try:
             logger.info(f"Fetching RSS feed: {feed_name}")
 
-            # Parse feed with timeout
-            feed = feedparser.parse(feed_url)
+            # Fetch with explicit timeout, then parse content
+            response = self.session.get(feed_url, timeout=FEED_TIMEOUT)
+            response.raise_for_status()
+            feed = feedparser.parse(response.content)
 
             if feed.bozo:
                 logger.warning(f"Feed parsing warning for {feed_name}: {feed.bozo_exception}")
